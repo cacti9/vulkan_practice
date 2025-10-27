@@ -15,6 +15,7 @@ endif()
 find_package (glfw3 REQUIRED)
 find_package (glm REQUIRED)
 find_package (Vulkan REQUIRED)
+find_package (VulkanMemoryAllocator CONFIG REQUIRED)
 
 # set up Vulkan C++ module only if enabled
 if(ENABLE_CPP20_MODULE)
@@ -126,7 +127,7 @@ function (add_chapter CHAPTER_NAME)
   set_target_properties (${CHAPTER_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CHAPTER_NAME})
   set_target_properties (${CHAPTER_NAME} PROPERTIES CXX_STANDARD 20)
-  target_link_libraries (${CHAPTER_NAME} Vulkan::cppm glfw)
+  target_link_libraries (${CHAPTER_NAME} Vulkan::cppm glfw GPUOpen::VulkanMemoryAllocator)
   target_include_directories (${CHAPTER_NAME} PRIVATE ${STB_INCLUDEDIR})
 
   # Add compile definition if C++ 20 module is enabled
