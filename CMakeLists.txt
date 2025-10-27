@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.29)
 
-project (VulkanTutorial)
+project (BaseLine)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
 
@@ -166,6 +166,6 @@ function (add_chapter CHAPTER_NAME)
   endif ()
 endfunction ()
 
-add_chapter (21_index_buffer
-  SHADER 18_shader_vertexbuffer
+add_chapter (base_render
+  SHADER base_shader
   LIBS glm::glm)
