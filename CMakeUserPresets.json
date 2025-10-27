@@ -1,0 +1,12 @@
+{
+  "version": 4,
+  "configurePresets": [
+    {
+      "name": "default",
+      "inherits": "vcpkg",
+      "environment": {
+        "VCPKG_ROOT": "C:/Users/thebe/source/from_github/vcpkg"
+      }
+    }
+  ]
+}
