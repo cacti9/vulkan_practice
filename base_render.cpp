@@ -9,6 +9,7 @@
 #include <limits>
 #include <array>
 #include <assert.h>
+#include <unordered_map>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
@@ -114,6 +115,34 @@ private:
         vk::KHRSynchronization2ExtensionName,
         vk::KHRCreateRenderpass2ExtensionName
     };
+    std::vector<const char*> vmaAskedExtensions = {
+        vk::KHRDedicatedAllocationExtensionName,
+        vk::KHRBindMemory2ExtensionName,
+        vk::KHRMaintenance4ExtensionName,
+        vk::KHRMaintenance5ExtensionName,
+        vk::EXTMemoryBudgetExtensionName,
+        vk::KHRBufferDeviceAddressExtensionName,
+        vk::EXTMemoryPriorityExtensionName,
+        vk::AMDDeviceCoherentMemoryExtensionName,
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+        vk::KHRExternalMemoryWin32ExtensionName,
+#endif
+    };
+    std::unordered_map<const char*, VmaAllocatorCreateFlagBits> vmaFlagFromExtension = {
+      {vk::KHRDedicatedAllocationExtensionName,VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT},
+      {vk::KHRBindMemory2ExtensionName, VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT},
+      {vk::KHRMaintenance4ExtensionName, VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT},
+      {vk::KHRMaintenance5ExtensionName, VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT},
+      {vk::EXTMemoryBudgetExtensionName, VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT},
+      {vk::KHRBufferDeviceAddressExtensionName, VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT},
+      {vk::EXTMemoryPriorityExtensionName, VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT},
+      {vk::AMDDeviceCoherentMemoryExtensionName, VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT},
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+      {vk::KHRExternalMemoryWin32ExtensionName, VMA_ALLOCATOR_CREATE_KHR_EXTERNAL_MEMORY_WIN32_BIT},
+#endif
+    };
+    VmaAllocatorCreateFlags vmaAvailableFlags = 0;
+    VmaAllocator vmaAllocator;
 
     void initWindow() {
         glfwInit();
@@ -137,6 +166,7 @@ private:
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+        createVmaAllocator();
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
@@ -162,6 +192,7 @@ private:
     }
 
     void cleanup() {
+        vmaDestroyAllocator(vmaAllocator);
         glfwDestroyWindow(window);
 
         glfwTerminate();
@@ -287,6 +318,16 @@ private:
         if ( devIter != devices.end() )
         {
             physicalDevice = *devIter;
+            auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
+            for (auto vmaAskedExtension : vmaAskedExtensions) {
+              bool available = std::ranges::any_of(availableDeviceExtensions,
+                                             [vmaAskedExtension](auto const & availableDeviceExtension)
+                                             { return strcmp(availableDeviceExtension.extensionName, vmaAskedExtension) == 0; });
+              if (available) {
+                requiredDeviceExtension.push_back(vmaAskedExtension);
+                vmaAvailableFlags |= vmaFlagFromExtension[vmaAskedExtension];
+              }
+            }
         }
         else
         {
@@ -332,6 +373,18 @@ private:
 
         device = vk::raii::Device( physicalDevice, deviceCreateInfo );
         queue = vk::raii::Queue( device, queueIndex, 0 );
+    }
+
+    void createVmaAllocator() {
+      VmaAllocatorCreateInfo allocatorCreateInfo = {
+          .flags = vmaAvailableFlags,
+          .physicalDevice = *physicalDevice,
+          .device = *device,
+          .instance = *instance,
+          .vulkanApiVersion = VK_API_VERSION_1_4,
+      };
+
+      vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
     }
 
     void createSwapChain() {

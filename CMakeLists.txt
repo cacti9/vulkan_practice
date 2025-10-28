@@ -14,7 +14,7 @@ endif()
 
 find_package (glfw3 REQUIRED)
 find_package (glm REQUIRED)
-find_package (Vulkan REQUIRED)
+find_package (Vulkan REQUIRED) # using 1.4 at the moment
 find_package (VulkanMemoryAllocator CONFIG REQUIRED)
 
 # set up Vulkan C++ module only if enabled
@@ -136,6 +136,8 @@ function (add_chapter CHAPTER_NAME)
   endif()
 
   if(WIN32)
+    target_compile_definitions(${CHAPTER_NAME} PRIVATE
+      VK_USE_PLATFORM_WIN32_KHR)
     if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*")
       set_target_properties(${CHAPTER_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}")
     endif()
