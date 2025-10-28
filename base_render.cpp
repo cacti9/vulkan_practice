@@ -59,20 +59,20 @@ struct Vertex {
 };
 
 struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
+  glm::vec2 resolution;
+  glm::vec2 mousePos;
+  float     time;
 };
 
 const std::vector<Vertex> vertices = {
     {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
     {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
     {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
+    0, 1, 2, 3, 1, 0
 };
 
 class HelloTriangleApplication {
@@ -458,7 +458,7 @@ private:
     }
 
     void createDescriptorSetLayout() {
-        vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+        vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr);
         vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = 1, .pBindings = &uboLayoutBinding };
         descriptorSetLayout = vk::raii::DescriptorSetLayout( device, layoutInfo );
     }
@@ -745,10 +745,11 @@ private:
       float time = std::chrono::duration<float>(currentTime - startTime).count();
 
       UniformBufferObject ubo{};
-      ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-      ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-      ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f);
-      ubo.proj[1][1] *= -1;
+      ubo.resolution = glm::vec2(WIDTH, HEIGHT);
+      double xpos, ypos;
+      glfwGetCursorPos(window, &xpos, &ypos);
+      ubo.mousePos = glm::vec2(static_cast<float>(xpos), static_cast<float>(ypos));
+      ubo.time = time;
 
       memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
