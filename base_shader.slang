@@ -24,8 +24,20 @@ VSOutput vertMain(VSInput input) {
     return output;
 }
 
+float plot(float2 st) {    
+    return smoothstep(0.02, 0.0, abs(st.y - st.x));
+}
+
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
-    float3 wavy = abs(sin(ubo.time));
-    return float4(vertIn.color*wavy, 1.0);
+    float2 st = vertIn.pos.xy/ubo.resolution;
+    st.y = 1.0 - st.y;
+
+    float y = st.x;
+
+    float3 color = float3(y);
+
+    float pct = plot(st);
+    color = (1.0-pct)*color+pct*float3(0.0,1.0,0.0);
+    return float4(color, 1.0);
 }
