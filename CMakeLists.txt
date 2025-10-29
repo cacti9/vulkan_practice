@@ -97,6 +97,13 @@ find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 #  add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/frag.spv ${SHADERS_DIR}/vert.spv)
 #endfunction ()
 
+option(SLANG_SHADER_DEBUG "-g2 compile option for slangc" OFF)
+if (SLANG_SHADER_DEBUG)
+  set(slangc_debug_option "-g2")
+  message("mine: include debug info in shader")
+else()
+  set(slangc_debug_option "-g0")
+endif()
 function (add_slang_shader_target TARGET)
   cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
   set (SHADERS_DIR ${SHADER_CHAPTER_NAME}/shaders)
@@ -111,7 +118,7 @@ function (add_slang_shader_target TARGET)
   )
   add_custom_command (
           OUTPUT  ${SHADERS_DIR}/slang.spv
-          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
+          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv ${slangc_debug_option}
           WORKING_DIRECTORY ${SHADERS_DIR}
           DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
           COMMENT "Compiling Slang Shaders"

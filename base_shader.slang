@@ -25,6 +25,8 @@ VSOutput vertMain(VSInput input) {
 }
 
 static const float PI = 3.1415926535;
+static const float thickness = 0.003;
+static const float edge = 0.001;
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
@@ -35,13 +37,18 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
     const float A = 2.0*PI;
     st.x = st.x*2.0*A - A; // [0,1] -> [-A, A]
     // y = f(2Ax - A)/2B + 0.5; y' = f'(2Ax - A)*A/B
+    float x_axis = smoothstep(thickness*B + edge, 0.0, abs(st.y));
+    float y_axis = smoothstep(thickness*A + edge, 0.0, abs(st.x));
+    float axes = max(x_axis, y_axis);
+    float3 color = float3(float2(1.0 - axes), 1.0);
 
-    float y=sin(st.x);
-    float derivative = A/B*cos(st.x);
-    float dist = abs(st.y-y) / sqrt(derivative*derivative + 1.0);
-    float thickness = 0.004;
 
-    float color = 1.0 - step(thickness, dist);
+    float f1=sin(st.x*PI+ubo.time);
+    float df1 = A/B*cos(st.x*PI+ubo.time)*PI;
+    float dist = abs(st.y-f1) / sqrt(df1*df1 + 1.0);
+
+    float f1color = 1.0 - smoothstep(thickness+edge, thickness-edge, dist);
+    color = lerp(float3(f1color), color, f1color);
 
     return float4(float3(color), 1.0);
 }
