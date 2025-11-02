@@ -40,9 +40,13 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float sky = sqrt(st.x+0.3)*0.3+0.75;
     float skyColor = clamp((sky - st.y)*gradient, 0.0, 1.0);
     float mixed = min(mountainColor,skyColor);
-    float3 color = lerp(colorA,colorB,mixed);
-    float pct = 1.0 - clamp((st.y-mountain)*3.0, 0.0, 1.0);
-    pct *= clamp(-sin(st.x * PI * 1.7 + 0.4)*0.7 + 0.08,0.0,1.0) * float(st.y > mountain);
-    color = lerp(color, float3(0.9,0.05,0.02), pct);
+    float3 color = lerp(colorA,colorB,mixed/(1.0+pow(clamp(ubo.time-7.0,0.0,1.0),0.5)*0.3+ubo.time*0.02));
+    float2 sunPosition = float2(0.80746, 0.05*ubo.time-0.3);
+    float2 diff = sunPosition - st;
+    float pct = clamp(sqrt(mul(diff,diff))*
+        clamp(pow(abs(3.0-ubo.time), 1.5),1.0, 8.0)
+        ,0.0,1.0);
+    pct = lerp(pct, 1.0, float(st.y<mountain));
+    color = lerp( float3(0.9,0.05,0.02), color,pct);
     return float4(color, 1.0);
 }
