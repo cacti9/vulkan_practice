@@ -24,19 +24,30 @@ VSOutput vertMain(VSInput input) {
     return output;
 }
 
+#define PI 3.14159265359
+#define TWO_PI 6.28318530718
+
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float2 st = vertIn.pos.xy/ubo.resolution;
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
-    
-    float2 pos = st-float2(0.5);
+    float d = 0.0;
 
-    float r = length(pos)*2.0;
-    float a = atan2(pos.y,pos.x)-ubo.time*ubo.time;
+    // Remap the space to -1. to 1.
+    st = st *2.-1.;
 
-    float f = abs(cos(a*2.));
+    // Number of sides of your shape
+    int N = 8;
 
-    color = float3(1. - smoothstep(f,f+0.02,r));
-    return float4(color, 1.0);
+    // Angle and radius from the current pixel
+    float a = atan2(st.x,st.y)+PI;
+    float r = TWO_PI/float(N);
+
+    // Shaping function that modulate the distance
+    d = cos(floor(.5+a/r)*r-a)*length(st);
+
+    color = float3(1.0-smoothstep(.4,.41,d));
+
+    return float4(color,1.0);
 }
