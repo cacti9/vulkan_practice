@@ -29,13 +29,14 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float2 st = vertIn.pos.xy/ubo.resolution;
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
-    float d = 0.0;
+    
+    float2 pos = st-float2(0.5);
 
-    st = st*2.-1.;
+    float r = length(pos)*2.0;
+    float a = atan2(pos.y,pos.x)-ubo.time*ubo.time;
 
-    d = length(abs(st)-.3);
-    d = length( min(abs(st)-.3,0.) );
-    d = length( max(abs(st)-.3,0.) );
+    float f = abs(cos(a*2.));
 
-    return float4(float3(fract(d*20.0)), 1.0);
+    color = float3(1. - smoothstep(f,f+0.02,r));
+    return float4(color, 1.0);
 }
