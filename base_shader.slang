@@ -41,22 +41,27 @@ float cross(in float2 _st, float _size){
             box(_st, float2(_size/4.,_size));
 }
 
+#define PI 3.14159265359
+float2x2 rotate2d(float _angle){
+    return float2x2(cos(_angle),-sin(_angle),
+                sin(_angle),cos(_angle));
+}
+
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float2 st = vertIn.pos.xy/ubo.resolution;
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
 
-    // To move the cross we move the space
-    //float2 translate = float2(cos(ubo.time),sin(ubo.time));
-    float2 translate = float2(cos(ubo.time),sin(2*ubo.time));
-    st += translate*0.35;
+    st -= float2(0.5);
+    st = mul(rotate2d(sin(ubo.time)*PI),st);
+    st += float2(0.5);
 
     // Show the coordinates of the space on the background
     color = float3(st.x,st.y,0.0);
 
     // Add the shape on the foreground
-    color += float3(cross(st,0.25));
+    color += float3(cross(st,0.4));
 
     return float4(color,1.0);
 }
