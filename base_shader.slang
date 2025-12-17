@@ -24,30 +24,39 @@ VSOutput vertMain(VSInput input) {
     return output;
 }
 
-#define PI 3.14159265359
-#define TWO_PI 6.28318530718
+// Author @patriciogv ( patriciogonzalezvivo.com ) - 2015
+float box(in float2 _st, in float2 _size){
+    _size = float2(0.5) - _size*0.5;
+    float2 uv = smoothstep(_size,
+                        _size+float2(0.001),
+                        _st);
+    uv *= smoothstep(_size,
+                    _size+float2(0.001),
+                    float2(1.0)-_st);
+    return uv.x*uv.y;
+}
+
+float cross(in float2 _st, float _size){
+    return  box(_st, float2(_size,_size/4.)) +
+            box(_st, float2(_size/4.,_size));
+}
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float2 st = vertIn.pos.xy/ubo.resolution;
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
-    float d = 0.0;
 
-    // Remap the space to -1. to 1.
-    st = st *2.-1.;
+    // To move the cross we move the space
+    //float2 translate = float2(cos(ubo.time),sin(ubo.time));
+    float2 translate = float2(cos(ubo.time),sin(2*ubo.time));
+    st += translate*0.35;
 
-    // Number of sides of your shape
-    int N = 8;
+    // Show the coordinates of the space on the background
+    color = float3(st.x,st.y,0.0);
 
-    // Angle and radius from the current pixel
-    float a = atan2(st.x,st.y)+PI;
-    float r = TWO_PI/float(N);
-
-    // Shaping function that modulate the distance
-    d = cos(floor(.5+a/r)*r-a)*length(st);
-
-    color = float3(1.0-smoothstep(.4,.41,d));
+    // Add the shape on the foreground
+    color += float3(cross(st,0.25));
 
     return float4(color,1.0);
 }
