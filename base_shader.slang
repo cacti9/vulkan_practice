@@ -28,24 +28,46 @@ float mod(float x, float y) {
     return x - y*floor(x/y);
 }
 
-// Author @patriciogv ( patriciogonzalezvivo.com ) - 2015
-float2 brickTile(float2 _st, float _zoom){
-    _st *= _zoom;
-    float time = ubo.time/1.0;
-    float move = step(1., mod(time,2.0));
+// 2D Random
+float random(in int2 st)
+{
+    // Cast to unsigned
+    uint x = (uint)st.x;
+    uint y = (uint)st.y;
 
-    // Here is where the offset is happening
-    _st.x += step(1., mod(_st.y,2.0)) * fract(time) * move;
-    _st.y += step(1., mod(_st.x,2.0)) * fract(time) * (1.0-move);
+    // Mix (PCG-ish / avalanche style)
+    uint h = x * 0x8da6b343u ^ y * 0xd8163841u;
+    h ^= (h >> 16);
+    h *= 0x7feb352du;
+    h ^= (h >> 15);
+    h *= 0x846ca68bu;
+    h ^= (h >> 16);
 
-    return fract(_st);
+    // Map to [0,1) using 24 high bits (safe in float)
+    return (h >> 8) * (1.0 / 16777216.0); // 2^24
 }
+// 2D Noise based on Morgan McGuire @morgan3d
+// https://www.shadertoy.com/view/4dS3Wd
+float noise (in float2 st) {
+    int2 i = (int2)floor(st);
+    float2 f = fract(st);
 
-float box(float2 _st, float2 _size){
-    _size = float2(0.5)-_size*0.5;
-    float2 uv = smoothstep(_size,_size+float2(1e-4),_st);
-    uv *= smoothstep(_size,_size+float2(1e-4),float2(1.0)-_st);
-    return uv.x*uv.y;
+    // Four corners in 2D of a tile
+    float a = random(i);
+    float b = random(i + int2(1, 0));
+    float c = random(i + int2(0, 1));
+    float d = random(i + int2(1, 1));
+
+    // Smooth Interpolation
+
+    // Cubic Hermine Curve.  Same as SmoothStep()
+    float2 u = f*f*(3.0-2.0*f);
+    // u = smoothstep(0.,1.,f);
+
+    // Mix 4 coorners percentages
+    return lerp(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
 }
 
 [shader("fragment")]
@@ -54,13 +76,12 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
 
-    // Apply the brick tiling
-    st = brickTile(st,5.0);
+    // Scale the coordinate system to see
+    // some noise in action
+    float2 pos = float2(st*50.0);
 
-    color = float3(box(st,float2(0.9)));
-
-    // Uncomment to see the space coordinates
-    // color = float3(st,0.0);
+    // Use the noise function
+    color = float3(noise(pos));
 
     return float4(color,1.0);
 }
