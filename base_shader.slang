@@ -25,26 +25,27 @@ VSOutput vertMain(VSInput input) {
 }
 
 // Author @patriciogv ( patriciogonzalezvivo.com ) - 2015
-float box(in float2 _st, in float2 _size){
-    _size = float2(0.5) - _size*0.5;
-    float2 uv = smoothstep(_size,
-                        _size+float2(0.001),
-                        _st);
-    uv *= smoothstep(_size,
-                    _size+float2(0.001),
-                    float2(1.0)-_st);
+#define PI 3.14159265358979323846
+
+float2 rotate2D(float2 _st, float _angle){
+    _st -= 0.5;
+    _st =  mul(float2x2(cos(_angle),-sin(_angle),
+                sin(_angle),cos(_angle)), _st);
+    _st += 0.5;
+    return _st;
+}
+
+float2 tile(float2 _st, float _zoom){
+    _st *= _zoom;
+    return fract(_st);
+}
+
+float box(float2 _st, float2 _size, float _smoothEdges){
+    _size = float2(0.5)-_size*0.5;
+    float2 aa = float2(_smoothEdges*0.5);
+    float2 uv = smoothstep(_size,_size+aa,_st);
+    uv *= smoothstep(_size,_size+aa,float2(1.0)-_st);
     return uv.x*uv.y;
-}
-
-float cross(in float2 _st, float _size){
-    return  box(_st, float2(_size,_size/4.)) +
-            box(_st, float2(_size/4.,_size));
-}
-
-#define PI 3.14159265359
-float2x2 rotate2d(float _angle){
-    return float2x2(cos(_angle),-sin(_angle),
-                sin(_angle),cos(_angle));
 }
 
 [shader("fragment")]
@@ -53,15 +54,21 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
     st.y = 1.0 - st.y; // flip vertical coord
     float3 color = float3(0.0);
 
-    st -= float2(0.5);
-    st = mul(rotate2d(sin(ubo.time)*PI),st);
-    st += float2(0.5);
+    // Divide the space in 4
+    st = tile(st,4.);
 
-    // Show the coordinates of the space on the background
-    color = float3(st.x,st.y,0.0);
+    // Use a matrix to rotate the space 45 degrees
+    st = rotate2D(st,PI*0.25);
 
-    // Add the shape on the foreground
-    color += float3(cross(st,0.4));
+    // Draw a square
+    color = float3(box(st,float2(0.7),0.01));
+    // color = float3(st,0.0);
+
+    //my modification
+    st = vertIn.pos.xy/ubo.resolution;
+    st.y = 1.0 - st.y; // flip vertical coord
+    st = tile(st, 2.);
+    color *= float3(st,1.0);
 
     return float4(color,1.0);
 }
