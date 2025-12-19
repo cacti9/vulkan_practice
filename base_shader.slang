@@ -6,6 +6,8 @@ struct VSInput {
 struct UniformBuffer {
     float2 resolution;
     float2 mousePos;
+    float2 bottomLeft;
+    float2 span;
     float  time;
 };
 ConstantBuffer<UniformBuffer> ubo;
@@ -24,11 +26,6 @@ VSOutput vertMain(VSInput input) {
     return output;
 }
 
-float mod(float x, float y) {
-    return x - y*floor(x/y);
-}
-
-
 // square of complex number z=x+yi
 float2 square(float2 z) {
     return float2(
@@ -44,11 +41,10 @@ float3 palette(float t) {
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
     float2 st = vertIn.pos.xy/ubo.resolution;
     st.y = 1.0 - st.y; // flip vertical coord
-    st*=4.;
-    st -= 2.;
     
     float3 color = float3(0.0);
     float2 z=float2(0.);
+    float2 c = ubo.bottomLeft + ubo.span*st;
     int IT_COUNT=50;
     for (int i=0; i<IT_COUNT; ++i) {
         if (length(z) >= 2.) {
@@ -57,7 +53,7 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET {
             color = palette(v*0.03+.6);
             break;
         }
-        z = square(z) + st;
+        z = square(z) + c;
     }
 
     return float4(color,1.0);

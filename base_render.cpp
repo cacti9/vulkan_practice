@@ -61,7 +61,14 @@ struct Vertex {
 struct UniformBufferObject {
   glm::vec2 resolution;
   glm::vec2 mousePos;
+  glm::vec2 bottomLeft;
+  glm::vec2 span;
   float     time;
+};
+UniformBufferObject ubo = {
+.resolution{WIDTH,HEIGHT},
+.bottomLeft{ -2.,-2. },
+.span{ 4.,4. },
 };
 
 const std::vector<Vertex> vertices = {
@@ -171,11 +178,34 @@ private:
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+        glfwSetCursorPosCallback(window, mouseCallback);
+        glfwSetKeyCallback(window, keyCallback);
     }
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
         auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
         app->framebufferResized = true;
+    }
+    static void keyCallback(GLFWwindow* window,
+                            int key,
+                            int scancode,
+                            int action,
+                            int mods)
+    {
+        if (key == GLFW_KEY_A && action == GLFW_PRESS) {
+          auto st = ubo.mousePos / ubo.resolution;
+          st.y = 1. - st.y;
+          auto mouseCoord = ubo.bottomLeft + st * ubo.span;
+          ubo.bottomLeft = (ubo.bottomLeft + mouseCoord) * 0.5f;
+          ubo.span *= .5f;
+        }
+        if (key == GLFW_KEY_D && action == GLFW_PRESS) {
+          ubo.bottomLeft = { -2.,-2. };
+          ubo.span = { 4.,4. };
+        }
+    }
+    static void mouseCallback(GLFWwindow* window, double x, double y) {
+      ubo.mousePos = { x,y };
     }
 
     void initVulkan() {
@@ -235,6 +265,7 @@ private:
             glfwGetFramebufferSize(window, &width, &height);
             glfwWaitEvents();
         }
+        ubo.resolution = { width,height };
 
         device.waitIdle();
 
@@ -744,11 +775,6 @@ private:
       auto currentTime = std::chrono::high_resolution_clock::now();
       float time = std::chrono::duration<float>(currentTime - startTime).count();
 
-      UniformBufferObject ubo{};
-      ubo.resolution = glm::vec2(WIDTH, HEIGHT);
-      double xpos, ypos;
-      glfwGetCursorPos(window, &xpos, &ypos);
-      ubo.mousePos = glm::vec2(static_cast<float>(xpos), static_cast<float>(ypos));
       ubo.time = time;
 
       memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
