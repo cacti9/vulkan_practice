@@ -28,8 +28,9 @@ import vulkan_hpp;
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
-constexpr uint32_t WIDTH = 800;
-constexpr uint32_t HEIGHT = 800;
+constexpr uint32_t PERFECT_2SPOWER_RESOLUTION = 1024;
+constexpr uint32_t WIDTH = PERFECT_2SPOWER_RESOLUTION;
+constexpr uint32_t HEIGHT = PERFECT_2SPOWER_RESOLUTION;
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<char const*> validationLayers = {
@@ -58,17 +59,321 @@ struct Vertex {
     }
 };
 
-struct UniformBufferObject {
-  glm::vec2 resolution;
-  glm::vec2 mousePos;
-  glm::vec2 bottomLeft;
-  glm::vec2 span;
+//------------------------------------------------------------------------------------------------------------------------------------------
+// <From Shader>
+// changed Fix definition
+
+#define L 8          // number of 32-bit limbs (example: 256-bit)
+#define FRAC_LIMBS 7 // N = 32*7= 224 fractional bits
+
+struct BigUINT {
+  uint32_t limb[L]; // little-endian
+};
+bool isZero(BigUINT a) {
+  for (int i = 0; i < L; i++)
+    if (a.limb[i] != 0) return false;
+  return true;
+}
+BigUINT operator+(BigUINT a, BigUINT b) {
+  BigUINT r;
+  uint32_t carry = 0;
+  for (int i = 0; i < L; i++)
+  {
+    uint64_t s = (uint64_t)a.limb[i] + (uint64_t)b.limb[i] + (uint64_t)carry;
+    r.limb[i] = (uint32_t)s;
+    carry = (uint32_t)(s >> 32);
+  }
+  return r;
+}
+// must be a>=b
+BigUINT operator-(BigUINT a, BigUINT b) {
+  BigUINT r;
+  uint32_t borrow = 0;
+
+  for (int i = 0; i < L; i++)
+  {
+    uint32_t ai = a.limb[i];
+    uint32_t bi = b.limb[i];
+
+    // subtract bi + borrow from ai
+    uint32_t t = bi + borrow;
+
+    // detect borrow: if ai < t, we need to borrow from next limb
+    uint32_t newBorrow = (ai < t) ? 1u : 0u;
+
+    r.limb[i] = ai - t;
+    borrow = newBorrow;
+  }
+  return r;
+}
+BigUINT shiftLeft(BigUINT a) {
+  BigUINT r;
+  uint32_t carry = 0;
+
+  for (int i = 0; i < L; i++)
+  {
+    uint32_t newCarry = (a.limb[i] >> 31) & 1u;
+    r.limb[i] = (a.limb[i] << 1) | carry;
+    carry = newCarry;
+  }
+
+  return r;
+}
+BigUINT operator>>(BigUINT a, int N) {
+  BigUINT r;
+
+  uint32_t wordShift = N >> 5;   // /32
+  uint32_t bitShift = N & 31u;  // %32
+
+  // default to zero
+  for (int i = 0; i < L; ++i) r.limb[i] = 0u;
+
+  // If shifting out everything -> zero
+  if (wordShift >= uint32_t(L)) return r;
+
+  // For each destination limb i, read from source limb (i + wordShift)
+  // because limb[0] is least significant.
+  for (int i = 0; i < L; ++i)
+  {
+    int src = i + int(wordShift);
+    if (src >= L) break;
+
+    uint32_t lo = a.limb[src];
+
+    if (bitShift == 0u)
+    {
+      r.limb[i] = lo;
+    }
+    else
+    {
+      // bring in high bits from next limb (more significant limb)
+      uint32_t hi = (src + 1 < L) ? a.limb[src + 1] : 0u;
+      r.limb[i] = (lo >> bitShift) | (hi << (32u - bitShift));
+    }
+  }
+
+  return r;
+}
+int compare(BigUINT a, BigUINT b) {
+  for (int i = L - 1; i >= 0; i--)
+  {
+    uint32_t ai = a.limb[i];
+    uint32_t bi = b.limb[i];
+    if (ai > bi) return 1;
+    if (ai < bi) return -1;
+  }
+  return 0;
+}
+
+struct BigUINT2 {
+  uint32_t limb[2 * L];
+};
+BigUINT2 mulWide(BigUINT a, BigUINT b) {
+  BigUINT2 p;
+  for (int i = 0; i < 2 * L; i++) p.limb[i] = 0;
+
+  for (int i = 0; i < L; i++)
+  {
+    uint64_t carry = 0;
+    for (int j = 0; j < L; j++)
+    {
+      int k = i + j;
+      uint64_t cur = (uint64_t)p.limb[k]
+        + (uint64_t)a.limb[i] * (uint64_t)b.limb[j]
+        + carry;
+      p.limb[k] = (uint32_t)cur;
+      carry = cur >> 32;
+    }
+
+    // propagate carry across higher limbs
+    int k = i + L;
+    while ((bool)carry && k < 2 * L)
+    {
+      uint64_t cur2 = (uint64_t)p.limb[k] + carry;
+      p.limb[k] = (uint32_t)cur2;
+      carry = cur2 >> 32;
+      k++;
+    }
+  }
+  return p;
+}
+BigUINT2 squareWide(BigUINT a) {
+  BigUINT2 p;
+  for (int i = 0; i < 2 * L; i++) p.limb[i] = 0;
+
+  for (int i = 0; i < L; i++)
+  {
+    uint64_t carry = 0;
+    for (int j = 0; j < L; j++)
+    {
+      int k = i + j;
+      uint64_t cur = (uint64_t)p.limb[k]
+        + (uint64_t)a.limb[i] * (uint64_t)a.limb[j]
+        + carry;
+      p.limb[k] = (uint32_t)cur;
+      carry = cur >> 32;
+    }
+
+    // propagate carry across higher limbs
+    int k = i + L;
+    while ((bool)carry && k < 2 * L)
+    {
+      uint64_t cur2 = (uint64_t)p.limb[k] + carry;
+      p.limb[k] = (uint32_t)cur2;
+      carry = cur2 >> 32;
+      k++;
+    }
+  }
+  return p;
+}
+
+struct Fix {
+  BigUINT mag;
+  int neg = false;
+
+};
+Fix negate(Fix x) {
+  x.neg = !x.neg;
+  return x;
+}
+Fix normalizeFix(Fix x) {
+  if (isZero(x.mag)) x.neg = false;
+  return x;
+}
+Fix operator+(Fix x, Fix y) {
+  Fix r;
+  if (x.neg == y.neg)
+  {
+    r.neg = x.neg;
+    r.mag = x.mag + y.mag;
+  }
+  else {
+    int c = compare(x.mag, y.mag);
+    if (c == 0) {
+      return Fix{0};
+    }
+    else if (c > 0) {
+      r.neg = x.neg;
+      r.mag = x.mag - y.mag;
+    }
+    else {
+      r.neg = y.neg;
+      r.mag = y.mag - x.mag;
+    }
+  }
+  return r;
+}
+Fix operator-(Fix x, Fix y) {
+  return x + negate(y);
+}
+Fix shiftLeft(Fix x) {
+  Fix y;
+  y.neg = x.neg;
+  y.mag = shiftLeft(x.mag);
+  return normalizeFix(y);
+}
+Fix operator>>(Fix x, int N) {
+  Fix y;
+  y.neg = x.neg;
+  y.mag = x.mag >> N;
+  return normalizeFix(y);
+}
+Fix FixFromFloat(float x) {
+  Fix r{0};
+  r.neg = (x < 0.0f);
+  float ax = abs(x);
+
+  float ip = floor(ax); //integer part
+  r.mag.limb[L - 1] = (uint32_t)ip;
+  float frac = ax - ip;
+
+  for (int i = L - 2; i >= 0; --i)
+  {
+    frac = frac * 4294967296.0;      // 2^32
+    float di = floor(frac);
+    r.mag.limb[i] = (uint32_t)di;
+    frac = frac - di;
+  }
+
+  return normalizeFix(r);
+}
+Fix FixFromDouble(double x) {
+  Fix r{0};
+  r.neg = (x < 0.0f);
+  double ax = abs(x);
+
+  double ip = floor(ax); //integer part
+  r.mag.limb[L - 1] = (uint32_t)ip;
+  double frac = ax - ip;
+
+  for (int i = L - 2; i >= 0; --i)
+  {
+    frac = frac * 4294967296.0;      // 2^32
+    double di = floor(frac);
+    r.mag.limb[i] = (uint32_t)di;
+    frac = frac - di;
+  }
+
+  return normalizeFix(r);
+}
+Fix operator*(Fix x, Fix y) {
+  Fix r;
+  BigUINT2 p = mulWide(x.mag, y.mag);
+  for (int i = 0; i < L; i++)
+  {
+    int src = i + FRAC_LIMBS;
+    r.mag.limb[i] = p.limb[src];
+  }
+  r.neg = x.neg != y.neg;
+  return r;
+}
+Fix square(Fix x) {
+  Fix r;
+  BigUINT2 p = squareWide(x.mag);
+  for (int i = 0; i < L; i++)
+  {
+    int src = i + FRAC_LIMBS;
+    r.mag.limb[i] = p.limb[src];
+  }
+  r.neg = false;
+  return r;
+}
+
+struct FixC {
+  Fix x;
+  Fix y;
+};
+FixC operator+(FixC z1, FixC z2) {
+  FixC r;
+  r.x = z1.x + z2.x;
+  r.y = z1.y + z2.y;
+  return r;
+}
+// square of complex number z=x+yi
+FixC square(FixC z) {
+  FixC r;
+  r.x = square(z.x) - square(z.y);
+  r.y = shiftLeft(z.x * z.y);
+  return r;
+}
+uint32_t length(FixC z) {
+  BigUINT r = square(z.x).mag + square(z.y).mag;
+  return r.limb[L - 1];
+}
+//------------------------------------------------------------------------------------------------------------------------------------------
+struct alignas(16) UniformBufferObject {
+  glm::dvec2 mousePos;
+  alignas(16) Fix centerX;
+  alignas(16) Fix centerY;
+  int shiftN; // 10 - log2(span)
+  int iteration_count;
   float     time;
 };
 UniformBufferObject ubo = {
-.resolution{WIDTH,HEIGHT},
-.bottomLeft{ -2.,-2. },
-.span{ 4.,4. },
+.centerX{FixFromFloat(0.f)},
+.centerY{FixFromFloat(0.f)},
+.shiftN{8},
+.iteration_count{32},
 };
 
 const std::vector<Vertex> vertices = {
@@ -192,16 +497,38 @@ private:
                             int action,
                             int mods)
     {
+        if (key == GLFW_KEY_W && action == GLFW_PRESS) {
+            printf("%lf %lf\n",ubo.mousePos.x, ubo.mousePos.y);
+            constexpr int gridN = 5;
+            constexpr int gridSize = WIDTH / gridN;
+            Fix mouseX = FixFromDouble(ubo.mousePos.x-512);
+            ubo.centerX = ubo.centerX + (mouseX >> ubo.shiftN);
+            Fix mouseY = FixFromDouble(ubo.mousePos.y-512);
+            ubo.centerY = ubo.centerY + (mouseY >> ubo.shiftN);
+            ubo.shiftN += 2;
+            printf("shiftN: %d\n", ubo.shiftN);
+            printf("%e\n", glm::exp2(10 - ubo.shiftN));
+        }
+        if (key == GLFW_KEY_S && action == GLFW_PRESS) {
+            ubo.shiftN -= 1;
+            printf("shiftN: %d\n", ubo.shiftN);
+            printf("%e\n", glm::exp2(10 - ubo.shiftN));
+        }
+        if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
+            ubo.centerX = FixFromFloat(0.f) ,
+            ubo.centerY = FixFromFloat(0.f) ,
+            ubo.shiftN = 8;
+            ubo.iteration_count = 32;
+        }
         if (key == GLFW_KEY_A && action == GLFW_PRESS) {
-          auto st = ubo.mousePos / ubo.resolution;
-          st.y = 1. - st.y;
-          auto mouseCoord = ubo.bottomLeft + st * ubo.span;
-          ubo.bottomLeft = (ubo.bottomLeft + mouseCoord) * 0.5f;
-          ubo.span *= .5f;
+            ubo.iteration_count *= 2;
+            printf("iteration: %d\n", ubo.iteration_count);
         }
         if (key == GLFW_KEY_D && action == GLFW_PRESS) {
-          ubo.bottomLeft = { -2.,-2. };
-          ubo.span = { 4.,4. };
+            if (ubo.iteration_count > 32) {
+                ubo.iteration_count /= 2;
+                printf("iteration: %d\n", ubo.iteration_count);
+            }
         }
     }
     static void mouseCallback(GLFWwindow* window, double x, double y) {
@@ -265,7 +592,6 @@ private:
             glfwGetFramebufferSize(window, &width, &height);
             glfwWaitEvents();
         }
-        ubo.resolution = { width,height };
 
         device.waitIdle();
 
@@ -420,7 +746,7 @@ private:
           vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
           vk::PhysicalDeviceMaintenance5Features, vk::PhysicalDeviceBufferDeviceAddressFeatures, vk::PhysicalDeviceMemoryPriorityFeaturesEXT
         > featureChain = {
-            {},                                                     // vk::PhysicalDeviceFeatures2
+            { .features = vk::PhysicalDeviceFeatures{.shaderFloat64 = true, .shaderInt64 = true,}},                                                     // vk::PhysicalDeviceFeatures2
             { .shaderDrawParameters = true },                       // vk::PhysicalDeviceVulkan11Features
             { .synchronization2 = true, .dynamicRendering = true, 
                 .maintenance4 = static_cast<bool>(vmaAvailableFlags & VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT)}, // vk::PhysicalDeviceVulkan13Features
