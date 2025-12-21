@@ -375,6 +375,12 @@ UniformBufferObject ubo = {
 .shiftN{8},
 .iteration_count{32},
 };
+void displayUBO() {
+  printf("shiftN: %d\n", ubo.shiftN);
+  printf("size of number range: %e\n", glm::exp2(10 - ubo.shiftN));
+  printf("iteration: %d\n", ubo.iteration_count);
+  printf("\n");
+}
 
 const std::vector<Vertex> vertices = {
     {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
@@ -497,38 +503,41 @@ private:
                             int action,
                             int mods)
     {
+        auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
         if (key == GLFW_KEY_W && action == GLFW_PRESS) {
-            printf("%lf %lf\n",ubo.mousePos.x, ubo.mousePos.y);
-            constexpr int gridN = 5;
-            constexpr int gridSize = WIDTH / gridN;
+            //printf("%lf %lf\n",ubo.mousePos.x, ubo.mousePos.y);
             Fix mouseX = FixFromDouble(ubo.mousePos.x-512);
             ubo.centerX = ubo.centerX + (mouseX >> ubo.shiftN);
             Fix mouseY = FixFromDouble(ubo.mousePos.y-512);
             ubo.centerY = ubo.centerY + (mouseY >> ubo.shiftN);
-            ubo.shiftN += 2;
-            printf("shiftN: %d\n", ubo.shiftN);
-            printf("%e\n", glm::exp2(10 - ubo.shiftN));
+            ubo.shiftN += 1;
+            displayUBO();
+            app->drawFrame();
         }
         if (key == GLFW_KEY_S && action == GLFW_PRESS) {
             ubo.shiftN -= 1;
-            printf("shiftN: %d\n", ubo.shiftN);
-            printf("%e\n", glm::exp2(10 - ubo.shiftN));
+            displayUBO();
+            app->drawFrame();
         }
-        if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
+        if (key == GLFW_KEY_R && action == GLFW_PRESS) {
             ubo.centerX = FixFromFloat(0.f) ,
             ubo.centerY = FixFromFloat(0.f) ,
             ubo.shiftN = 8;
             ubo.iteration_count = 32;
+            displayUBO();
+            app->drawFrame();
         }
         if (key == GLFW_KEY_A && action == GLFW_PRESS) {
-            ubo.iteration_count *= 2;
-            printf("iteration: %d\n", ubo.iteration_count);
+            ubo.iteration_count *= 1.2;
+            displayUBO();
+            app->drawFrame();
         }
         if (key == GLFW_KEY_D && action == GLFW_PRESS) {
             if (ubo.iteration_count > 32) {
                 ubo.iteration_count /= 2;
-                printf("iteration: %d\n", ubo.iteration_count);
             }
+            displayUBO();
+            app->drawFrame();
         }
     }
     static void mouseCallback(GLFWwindow* window, double x, double y) {
@@ -557,9 +566,10 @@ private:
     }
 
     void mainLoop() {
+      drawFrame();
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
-            drawFrame();
+            //drawFrame();
         }
 
         device.waitIdle();
@@ -1229,6 +1239,13 @@ private:
 };
 
 int main() {
+  printf("Mandelbrot Set Renderer, using 32byte Fixed Points\n");
+  printf("W: zoom 2x into mouse position\n");
+  printf("S: zoomout 2x\n");
+  printf("A: more iteration for divergence check\n");
+  printf("D: less iteration\n");
+  printf("R: reset variables\n");
+  printf("\n");
     try {
         HelloTriangleApplication app;
         app.run();
