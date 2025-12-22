@@ -4,6 +4,8 @@ Based on "link:https://github.com/KhronosGroup/Vulkan-Tutorial[The Khronos Vulka
 
 == About
 
+Trying different stuffs on different branches.
+
 Just practicing C++, Vulkan, and repo structuring.
 
 Applied VMA on chapter 21, index buffer.
