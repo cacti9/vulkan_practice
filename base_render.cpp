@@ -361,8 +361,8 @@ uint32_t length(FixC z) {
   return r.limb[L - 1];
 }
 //------------------------------------------------------------------------------------------------------------------------------------------
+glm::dvec2 MousePos;
 struct alignas(16) UniformBufferObject {
-  glm::dvec2 mousePos;
   alignas(16) Fix centerX;
   alignas(16) Fix centerY;
   int shiftN; // 10 - log2(span)
@@ -505,10 +505,10 @@ private:
     {
         auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
         if (key == GLFW_KEY_W && action == GLFW_PRESS) {
-            //printf("%lf %lf\n",ubo.mousePos.x, ubo.mousePos.y);
-            Fix mouseX = FixFromDouble(ubo.mousePos.x-512);
+            //printf("%lf %lf\n",MousePos.x, MousePos.y);
+            Fix mouseX = FixFromDouble(MousePos.x-512);
             ubo.centerX = ubo.centerX + (mouseX >> ubo.shiftN);
-            Fix mouseY = FixFromDouble(ubo.mousePos.y-512);
+            Fix mouseY = FixFromDouble(MousePos.y-512);
             ubo.centerY = ubo.centerY + (mouseY >> ubo.shiftN);
             ubo.shiftN += 1;
             displayUBO();
@@ -541,7 +541,7 @@ private:
         }
     }
     static void mouseCallback(GLFWwindow* window, double x, double y) {
-      ubo.mousePos = { x,y };
+      MousePos = { x,y };
     }
 
     void initVulkan() {
@@ -756,7 +756,7 @@ private:
           vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
           vk::PhysicalDeviceMaintenance5Features, vk::PhysicalDeviceBufferDeviceAddressFeatures, vk::PhysicalDeviceMemoryPriorityFeaturesEXT
         > featureChain = {
-            { .features = vk::PhysicalDeviceFeatures{.shaderFloat64 = true, .shaderInt64 = true,}},                                                     // vk::PhysicalDeviceFeatures2
+            {},                                                     // vk::PhysicalDeviceFeatures2
             { .shaderDrawParameters = true },                       // vk::PhysicalDeviceVulkan11Features
             { .synchronization2 = true, .dynamicRendering = true, 
                 .maintenance4 = static_cast<bool>(vmaAvailableFlags & VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT)}, // vk::PhysicalDeviceVulkan13Features

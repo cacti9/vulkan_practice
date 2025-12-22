@@ -20,6 +20,51 @@ VSOutput vertMain(VSInput input) {
 #define L 8          // number of 32-bit limbs (example: 256-bit)
 #define FRAC_LIMBS 7 // N = 32*7= 224 fractional bits
 
+// <Shader only>
+// carry must be 0/1
+uint addCarry32(uint a, uint b, inout uint carry)
+{
+    uint sum = a + b;
+    uint c1 = (sum < a) ? 1u : 0u;
+
+    sum = sum + carry;
+    uint c2 = (sum < carry) ? 1u : 0u;
+
+    carry = c1 | c2;
+    return sum;
+}
+uint add32(uint a, uint b, out uint carryOut)
+{
+    uint s = a + b;
+    carryOut = (s < a) ? 1u : 0u;
+    return s;
+}
+void mul32wide(uint a, uint b, out uint lo, out uint hi)
+{
+    uint a0 = a & 0xFFFFu;
+    uint a1 = a >> 16;
+    uint b0 = b & 0xFFFFu;
+    uint b1 = b >> 16;
+
+    uint p0 = a0 * b0;
+    uint p1 = a0 * b1;
+    uint p2 = a1 * b0;
+    uint p3 = a1 * b1;
+
+    // m = p1 + p2 (track the 33rd bit)
+    uint m  = p1 + p2;
+    uint mc = (m < p1) ? 1u : 0u;   // carry out of m (bit 32)
+
+    uint loPart = m << 16;
+    uint hiPart = (m >> 16) + (mc << 16);
+
+    lo = p0 + loPart;
+    uint c0 = (lo < p0) ? 1u : 0u;
+
+    hi = p3 + hiPart + c0;
+}
+// </Shader only>
+
 struct BigUINT {
     uint limb[L]; // little-endian
 };
@@ -33,9 +78,7 @@ BigUINT operator+(BigUINT a, BigUINT b) {
     uint carry = 0;
     for(int i=0;i<L;i++)
     {
-        uint64_t s = (uint64_t)a.limb[i] + (uint64_t)b.limb[i] + (uint64_t)carry;
-        r.limb[i] = (uint)s;
-        carry = (uint)(s >> 32);
+        r.limb[i] = addCarry32(a.limb[i],b.limb[i],carry);
     }
     return r;
 }
@@ -123,62 +166,44 @@ struct BigUINT2 {
     uint limb[2*L];
 };
 BigUINT2 mulWide(BigUINT a, BigUINT b) {
-    BigUINT2 p;
-    for(int i=0;i<2*L;i++) p.limb[i]=0;
+    BigUINT2 p=BigUINT2(0);
 
     for(int i=0;i<L;i++)
     {
-        uint64_t carry = 0;
+        uint carry = 0u;
         for(int j=0;j<L;j++)
         {
             int k = i + j;
-            uint64_t cur = (uint64_t)p.limb[k]
-                         + (uint64_t)a.limb[i] * (uint64_t)b.limb[j]
-                         + carry;
-            p.limb[k] = (uint)cur;
-            carry = cur >> 32;
+            uint prodLo, prodHi;
+            mul32wide(a.limb[i],b.limb[j],prodLo,prodHi);
+
+            uint lo = p.limb[k];
+            uint hi = 0u;
+
+            uint c;
+            lo = add32(lo,prodLo,c); hi+=c; 
+            lo = add32(lo, carry, c); hi+=c; // `carry` is not 0/1
+            hi = hi+prodHi;
+
+            p.limb[k] = lo;
+            carry =  hi;
         }
 
         // propagate carry across higher limbs
         int k = i + L;
-        while((bool)carry && k < 2*L)
+        while(carry != 0u && k < 2*L)
         {
-            uint64_t cur2 = (uint64_t)p.limb[k] + carry;
-            p.limb[k] = (uint)cur2;
-            carry = cur2 >> 32;
+            uint old = p.limb[k];
+            uint sum = old + carry;
+            p.limb[k] = sum;
+            carry = (sum<old)?1u:0u;
             k++;
         }
     }
     return p;
 }
 BigUINT2 squareWide(BigUINT a) {
-    BigUINT2 p;
-    for(int i=0;i<2*L;i++) p.limb[i]=0;
-
-    for(int i=0;i<L;i++)
-    {
-        uint64_t carry = 0;
-        for(int j=0;j<L;j++)
-        {
-            int k = i + j;
-            uint64_t cur = (uint64_t)p.limb[k]
-                         + (uint64_t)a.limb[i] * (uint64_t)a.limb[j]
-                         + carry;
-            p.limb[k] = (uint)cur;
-            carry = cur >> 32;
-        }
-
-        // propagate carry across higher limbs
-        int k = i + L;
-        while((bool)carry && k < 2*L)
-        {
-            uint64_t cur2 = (uint64_t)p.limb[k] + carry;
-            p.limb[k] = (uint)cur2;
-            carry = cur2 >> 32;
-            k++;
-        }
-    }
-    return p;
+    return mulWide(a,a);
 }
 
 struct Fix {
@@ -314,7 +339,6 @@ uint length(FixC z) {
 }
 
 struct UniformBuffer {
-    double2 mousePos;
     uint4 centerXMag[2]; int centerXNeg;
     uint4 centerYMag[2]; int centerYNeg;
     int shiftN;
