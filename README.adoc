@@ -4,7 +4,9 @@ Based on "link:https://github.com/KhronosGroup/Vulkan-Tutorial[The Khronos Vulka
 
 == About
 
-Learning shaders from "link:https://thebookofshaders.com/[The Book of Shaders]". Every commit on this branch has different shader.
+Learning fragment shader. This commit is for Mandelbrot Set.
+
+image::images/mandelbrot.jpeg[]
 
 Just practicing C++, Vulkan, and repo structuring.
 
