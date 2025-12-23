@@ -16,11 +16,13 @@ Added texture sampler. (stb loader)
 
 == Project Structure
 
-single cpp, shader, CMakeLists.txt.
+single cpp, shader, assets, CMakeLists.txt.
+
+assets and compiled shader are copied to build.
 
 == Installation Dependencies
 
-Vulkan, glfw3, glm.
+Vulkan, glfw3, glm, stb.
 
 == Build
 
