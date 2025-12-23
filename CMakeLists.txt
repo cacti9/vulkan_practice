@@ -73,6 +73,9 @@ else()
   )
 endif()
 
+find_package(stb REQUIRED)
+set(STB_INCLUDEDIR ${stb_INCLUDE_DIRS})
+
 add_executable (glslang::validator IMPORTED)
 find_program (GLSLANG_VALIDATOR "glslangValidator" HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 set_property (TARGET glslang::validator PROPERTY IMPORTED_LOCATION "${GLSLANG_VALIDATOR}")
@@ -171,4 +174,5 @@ endfunction ()
 
 add_chapter (base_render
   SHADER base_shader
+  TEXTURES images/texture.jpg
   LIBS glm::glm)

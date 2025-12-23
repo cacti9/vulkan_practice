@@ -12,6 +12,8 @@ Applied VMA on chapter 21, index buffer.
 
 Added uniform buffer.
 
+Added texture sampler. (stb loader)
+
 == Project Structure
 
 single cpp, shader, CMakeLists.txt.
