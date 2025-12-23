@@ -15,6 +15,7 @@ endif()
 find_package (glfw3 REQUIRED)
 find_package (glm REQUIRED)
 find_package (Vulkan REQUIRED) # using 1.4 at the moment
+find_package (tinyobjloader REQUIRED)
 find_package (VulkanMemoryAllocator CONFIG REQUIRED)
 
 # set up Vulkan C++ module only if enabled
@@ -174,5 +175,6 @@ endfunction ()
 
 add_chapter (base_render
   SHADER base_shader
-  TEXTURES images/texture.jpg
-  LIBS glm::glm)
+  MODELS viking_room.obj
+  TEXTURES viking_room.png
+  LIBS glm::glm tinyobjloader::tinyobjloader)

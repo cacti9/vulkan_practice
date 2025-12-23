@@ -16,6 +16,8 @@ Added texture sampler. (stb loader)
 
 Added depth buffer.
 
+Added model loading.
+
 == Project Structure
 
 single cpp, shader, assets, CMakeLists.txt.
@@ -41,5 +43,7 @@ Can just launch sln when using Visual Studio.
 
 == License
 
-All licensed as
+This project is licensed as
 https://creativecommons.org/publicdomain/zero/1.0/[CC0 1.0 Universal], same as Vulkan Tutorial attachments/
+
+assets in `assets/` are not necessarily CC0. Licensed the same as assets from Vulkan Tutorial.
