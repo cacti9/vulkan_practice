@@ -4,7 +4,7 @@ Based on "link:https://github.com/KhronosGroup/Vulkan-Tutorial[The Khronos Vulka
 
 == About
 
-Trying different stuffs on different branches.
+*Trying different stuffs on different branches.*
 
 Just practicing C++, Vulkan, and repo structuring.
 
@@ -17,6 +17,8 @@ Added texture sampler. (stb loader)
 Added depth buffer.
 
 Added model loading.
+
+Added mipmap.
 
 == Project Structure
 
