@@ -14,6 +14,8 @@ Added uniform buffer.
 
 Added texture sampler. (stb loader)
 
+Added depth buffer.
+
 == Project Structure
 
 single cpp, shader, assets, CMakeLists.txt.
