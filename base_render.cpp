@@ -430,8 +430,9 @@ private:
 
         // query for required features (Vulkan 1.1 and 1.3)
         vk::StructureChain<
-          vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-          vk::PhysicalDeviceMaintenance5Features, vk::PhysicalDeviceBufferDeviceAddressFeatures, vk::PhysicalDeviceMemoryPriorityFeaturesEXT
+          vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan13Features, 
+          vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT, vk::PhysicalDeviceMaintenance5Features, 
+          vk::PhysicalDeviceBufferDeviceAddressFeatures, vk::PhysicalDeviceMemoryPriorityFeaturesEXT
         > featureChain = {
             {.features = {.samplerAnisotropy = true } },            // vk::PhysicalDeviceFeatures2
             { .shaderDrawParameters = true },                       // vk::PhysicalDeviceVulkan11Features
@@ -516,18 +517,33 @@ private:
 
         auto bindingDescription = Vertex::getBindingDescription();
         auto attributeDescriptions = Vertex::getAttributeDescriptions();
-        vk::PipelineVertexInputStateCreateInfo vertexInputInfo {  .vertexBindingDescriptionCount =1, .pVertexBindingDescriptions = &bindingDescription,
-            .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()), .pVertexAttributeDescriptions = attributeDescriptions.data() };
-        vk::PipelineInputAssemblyStateCreateInfo inputAssembly{  .topology = vk::PrimitiveTopology::eTriangleList };
-        vk::PipelineViewportStateCreateInfo viewportState{ .viewportCount = 1, .scissorCount = 1 };
-
-        vk::PipelineRasterizationStateCreateInfo rasterizer{  .depthClampEnable = vk::False, .rasterizerDiscardEnable = vk::False,
-                                                              .polygonMode = vk::PolygonMode::eFill, .cullMode = vk::CullModeFlagBits::eBack,
-                                                              .frontFace = vk::FrontFace::eCounterClockwise, .depthBiasEnable = vk::False,
-                                                              .depthBiasSlopeFactor = 1.0f, .lineWidth = 1.0f };
-
-        vk::PipelineMultisampleStateCreateInfo multisampling{.rasterizationSamples = msaaSamples, .sampleShadingEnable = vk::False};
-
+        vk::PipelineVertexInputStateCreateInfo vertexInputInfo {
+          .vertexBindingDescriptionCount =1,
+          .pVertexBindingDescriptions = &bindingDescription,
+          .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+          .pVertexAttributeDescriptions = attributeDescriptions.data()
+        };
+        vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
+          .topology = vk::PrimitiveTopology::eTriangleList
+        };
+        vk::PipelineViewportStateCreateInfo viewportState{
+          .viewportCount = 1,
+          .scissorCount = 1
+        };
+        vk::PipelineRasterizationStateCreateInfo rasterizer{
+          .depthClampEnable = vk::False,
+          .rasterizerDiscardEnable = vk::False,
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eBack,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .depthBiasEnable = vk::False,
+          .depthBiasSlopeFactor = 1.0f,
+          .lineWidth = 1.0f
+        };
+        vk::PipelineMultisampleStateCreateInfo multisampling{
+          .rasterizationSamples = msaaSamples,
+          .sampleShadingEnable = vk::False
+        };
         vk::PipelineDepthStencilStateCreateInfo depthStencil{
             .depthTestEnable = vk::True,
             .depthWriteEnable = vk::True,
@@ -535,12 +551,17 @@ private:
             .depthBoundsTestEnable = vk::False,
             .stencilTestEnable = vk::False
         };
-
-        vk::PipelineColorBlendAttachmentState colorBlendAttachment{ .blendEnable = vk::False,
-            .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+        vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+          .blendEnable = vk::False,
+          .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
         };
 
-        vk::PipelineColorBlendStateCreateInfo colorBlending{.logicOpEnable = vk::False, .logicOp =  vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments =  &colorBlendAttachment };
+        vk::PipelineColorBlendStateCreateInfo colorBlending{
+          .logicOpEnable = vk::False,
+          .logicOp =  vk::LogicOp::eCopy,
+          .attachmentCount = 1,
+          .pAttachments =  &colorBlendAttachment
+        };
 
         std::vector dynamicStates = {
             vk::DynamicState::eViewport,
@@ -574,8 +595,10 @@ private:
     }
 
     void createCommandPool() {
-        vk::CommandPoolCreateInfo poolInfo{  .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-                                             .queueFamilyIndex = queueIndex };
+        vk::CommandPoolCreateInfo poolInfo{
+          .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+          .queueFamilyIndex = queueIndex
+        };
         commandPool = vk::raii::CommandPool(device, poolInfo);
     }
 
@@ -593,17 +616,19 @@ private:
       depthImageView = createImageView(depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
     }
 
-    vk::Format findSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
-      auto formatIt = std::ranges::find_if(candidates, [&](auto const format) {
-        vk::FormatProperties props = physicalDevice.getFormatProperties(format);
-        return (((tiling == vk::ImageTiling::eLinear) && ((props.linearTilingFeatures & features) == features)) ||
-          ((tiling == vk::ImageTiling::eOptimal) && ((props.optimalTilingFeatures & features) == features)));
-        });
-      if (formatIt == candidates.end())
-      {
+    vk::Format findSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const {
+        for (const auto format : candidates) {
+            vk::FormatProperties props = physicalDevice.getFormatProperties(format);
+
+            if (tiling == vk::ImageTiling::eLinear && (props.linearTilingFeatures & features) == features) {
+                return format;
+            }
+            if (tiling == vk::ImageTiling::eOptimal && (props.optimalTilingFeatures & features) == features) {
+                return format;
+            }
+        }
+
         throw std::runtime_error("failed to find supported format!");
-      }
-      return *formatIt;
     }
 
     vk::Format findDepthFormat() {
@@ -663,7 +688,11 @@ private:
 
       vk::raii::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
-      vk::ImageMemoryBarrier barrier = { .srcQueueFamilyIndex = vk::QueueFamilyIgnored, .dstQueueFamilyIndex = vk::QueueFamilyIgnored, .image = image };
+      vk::ImageMemoryBarrier barrier = { 
+        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .image = image
+      };
       barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
       barrier.subresourceRange.baseArrayLayer = 0;
       barrier.subresourceRange.layerCount = 1;
@@ -764,10 +793,17 @@ private:
     }
 
     void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::SampleCountFlagBits numSamples, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::Image& image, VmaAllocation& imageAllocation) {
-      vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
-                                    .extent = {width, height, 1}, .mipLevels = mipLevels, .arrayLayers = 1,
-                                    .samples = numSamples, .tiling = tiling,
-                                    .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
+      vk::ImageCreateInfo imageInfo{
+        .imageType = vk::ImageType::e2D,
+        .format = format,
+        .extent = {width, height, 1},
+        .mipLevels = mipLevels,
+        .arrayLayers = 1,
+        .samples = numSamples,
+        .tiling = tiling,
+        .usage = usage,
+        .sharingMode = vk::SharingMode::eExclusive
+      };
       VmaAllocationCreateInfo allocInfo = {
         .usage=VMA_MEMORY_USAGE_AUTO
       };
@@ -778,9 +814,12 @@ private:
     void transitionImageLayout(const vk::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels) {
       auto commandBuffer = beginSingleTimeCommands();
 
-      vk::ImageMemoryBarrier barrier{ .oldLayout = oldLayout, .newLayout = newLayout,
-                                     .image = image,
-                                     .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, 1 } };
+      vk::ImageMemoryBarrier barrier{
+        .oldLayout = oldLayout,
+        .newLayout = newLayout,
+        .image = image,
+        .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, 1 }
+      };
 
       vk::PipelineStageFlags sourceStage;
       vk::PipelineStageFlags destinationStage;
@@ -808,9 +847,14 @@ private:
 
     void copyBufferToImage(const vk::Buffer& buffer, vk::Image& image, uint32_t width, uint32_t height) {
       auto commandBuffer = beginSingleTimeCommands();
-      vk::BufferImageCopy region{ .bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0,
-                                 .imageSubresource = { vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
-                                 .imageOffset = {0, 0, 0}, .imageExtent = {width, height, 1} };
+      vk::BufferImageCopy region{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = { vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {width, height, 1}
+      };
       commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, { region });
       endSingleTimeCommands(commandBuffer);
     }
@@ -858,11 +902,39 @@ private:
         VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
         createDeviceLocalBuffer(vertexBuffer, vertexAllocation, bufferSize, vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     }
-
     void createIndexBuffer() {
         VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
         createDeviceLocalBuffer(indexBuffer, indexAllocation, bufferSize, indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
    }
+    void createDeviceLocalBuffer(vk::Buffer& buffer, VmaAllocation& allocation, VkDeviceSize size, const void* data, VkBufferUsageFlags usage) {
+        vk::Buffer stagingBuffer;
+        VmaAllocation stagingAllocation;
+        VkBufferCreateInfo stagingBufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        };
+        VmaAllocationCreateInfo stagingAllocInfo = {
+          .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+          .usage = VMA_MEMORY_USAGE_AUTO
+        };
+        VkBuffer temp;  vmaCreateBuffer(vmaAllocator, &stagingBufferInfo, &stagingAllocInfo, &temp, &stagingAllocation, nullptr); stagingBuffer = temp;
+
+        vmaCopyMemoryToAllocation(vmaAllocator, data, stagingAllocation, 0, size);
+
+        VkBufferCreateInfo bufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = usage,
+        };
+        VmaAllocationCreateInfo allocInfo = {
+          .usage = VMA_MEMORY_USAGE_AUTO
+        };
+        vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &temp, &allocation, nullptr); buffer = temp;
+
+        copyBuffer(stagingBuffer, buffer, size);
+        vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
+    }
 
     void createUniformBuffers() {
       uniformBuffers.clear();
@@ -948,41 +1020,18 @@ private:
         device.updateDescriptorSets(descriptorWrites, {});
       }
     }
-    void createDeviceLocalBuffer(vk::Buffer& buffer, VmaAllocation& allocation, VkDeviceSize size, const void* data, VkBufferUsageFlags usage) {
-        vk::Buffer stagingBuffer;
-        VmaAllocation stagingAllocation;
-        VkBufferCreateInfo stagingBufferInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        };
-        VmaAllocationCreateInfo stagingAllocInfo = {
-          .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-          .usage = VMA_MEMORY_USAGE_AUTO
-        };
-        VkBuffer temp;  vmaCreateBuffer(vmaAllocator, &stagingBufferInfo, &stagingAllocInfo, &temp, &stagingAllocation, nullptr); stagingBuffer = temp;
-
-        vmaCopyMemoryToAllocation(vmaAllocator, data, stagingAllocation, 0, size);
-
-        VkBufferCreateInfo bufferInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = usage,
-        };
-        VmaAllocationCreateInfo allocInfo = {
-          .usage = VMA_MEMORY_USAGE_AUTO
-        };
-        vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &temp, &allocation, nullptr); buffer = temp;
-
-        copyBuffer(stagingBuffer, buffer, size);
-        vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
-    }
 
     vk::raii::CommandBuffer beginSingleTimeCommands() {
-      vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
+      vk::CommandBufferAllocateInfo allocInfo{
+        .commandPool = commandPool,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+      };
       vk::raii::CommandBuffer commandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
 
-      vk::CommandBufferBeginInfo beginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
+      vk::CommandBufferBeginInfo beginInfo{
+        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit
+      };
       commandBuffer.begin(beginInfo);
 
       return commandBuffer;
@@ -991,7 +1040,9 @@ private:
     void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer) {
       commandBuffer.end();
 
-      vk::SubmitInfo submitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandBuffer };
+      vk::SubmitInfo submitInfo{
+        .commandBufferCount = 1, .pCommandBuffers = &*commandBuffer
+      };
       queue.submit(submitInfo, nullptr);
       queue.waitIdle();
     }
@@ -1016,8 +1067,11 @@ private:
 
     void createCommandBuffers() {
         commandBuffers.clear();
-        vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary,
-                                                 .commandBufferCount = MAX_FRAMES_IN_FLIGHT };
+        vk::CommandBufferAllocateInfo allocInfo{
+          .commandPool = commandPool,
+          .level = vk::CommandBufferLevel::ePrimary,
+          .commandBufferCount = MAX_FRAMES_IN_FLIGHT
+        };
         commandBuffers = vk::raii::CommandBuffers( device, allocInfo );
     }
 
@@ -1196,15 +1250,21 @@ private:
         recordCommandBuffer(imageIndex);
 
         vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
-        const vk::SubmitInfo submitInfo{ .waitSemaphoreCount = 1, .pWaitSemaphores = &*presentCompleteSemaphore[semaphoreIndex],
-                            .pWaitDstStageMask = &waitDestinationStageMask, .commandBufferCount = 1, .pCommandBuffers = &*commandBuffers[currentFrame],
-                            .signalSemaphoreCount = 1, .pSignalSemaphores = &*renderFinishedSemaphore[imageIndex] };
+        const vk::SubmitInfo submitInfo{
+          .waitSemaphoreCount = 1, .pWaitSemaphores = &*presentCompleteSemaphore[semaphoreIndex],
+          .pWaitDstStageMask = &waitDestinationStageMask,
+          .commandBufferCount = 1, .pCommandBuffers = &*commandBuffers[currentFrame],
+          .signalSemaphoreCount = 1, .pSignalSemaphores = &*renderFinishedSemaphore[imageIndex]
+        };
         queue.submit(submitInfo, *inFlightFences[currentFrame]);
 
 
         try {
-            const vk::PresentInfoKHR presentInfoKHR{ .waitSemaphoreCount = 1, .pWaitSemaphores = &*renderFinishedSemaphore[imageIndex],
-                                                    .swapchainCount = 1, .pSwapchains = &*swapChain, .pImageIndices = &imageIndex };
+            const vk::PresentInfoKHR presentInfoKHR{
+              .waitSemaphoreCount = 1, .pWaitSemaphores = &*renderFinishedSemaphore[imageIndex],
+              .swapchainCount = 1, .pSwapchains = &*swapChain,
+              .pImageIndices = &imageIndex
+            };
             result = queue.presentKHR( presentInfoKHR );
             if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebufferResized) {
                 framebufferResized = false;
