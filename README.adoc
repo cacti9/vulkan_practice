@@ -20,6 +20,8 @@ Added model loading.
 
 Added mipmap.
 
+Added MSAA.
+
 == Project Structure
 
 single cpp, shader, assets, CMakeLists.txt.
