@@ -57,13 +57,6 @@ if(ENABLE_CPP20_MODULE)
           FILES
           "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm"
   )
-
-
-  # Add the vulkan.cppm file directly as a source file
-  target_sources(VulkanCppModule
-          PRIVATE
-          "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm"
-  )
 else()
   # Create a dummy interface library when C++ 20 module is disabled
   add_library(VulkanCppModule INTERFACE)
@@ -137,6 +130,19 @@ function (add_chapter CHAPTER_NAME)
   # Add compile definition if C++ 20 module is enabled
   if(ENABLE_CPP20_MODULE)
     target_compile_definitions(${CHAPTER_NAME} PRIVATE USE_CPP20_MODULES=1)
+
+    # Add MSVC-specific compiler options for proper C++ module support
+    # These flags need to be consistent between the module and its consumers.
+    if(MSVC)
+      target_compile_options(${CHAPTER_NAME} PRIVATE
+        /std:c++latest      # Use latest C++ standard for better module support
+        /permissive-        # Standards conformance mode
+        /Zc:__cplusplus     # Enable correct __cplusplus macro
+        /EHsc               # Enable C++ exception handling
+        /Zc:preprocessor    # Use conforming preprocessor
+        /translateInclude   # Automatically translate #include to import for standard library
+      )
+    endif()
   endif()
 
   if(WIN32)
