@@ -30,18 +30,19 @@ assets and compiled shader are copied to build.
 
 == Installation Dependencies
 
-Vulkan, glfw3, glm, stb.
+Vulkan, glfw3, glm, stb, tinyobjloader.
 
 == Build
 
-To use vcpkg, remove .bak extension from vcpkg*.bak files
+Change `VCPKG_ROOT` in CMakeUserPresets.json.
+To use vcpkg manifest mode, remove .bak extension from vcpkg*.bak files.
 [source]
 ----
 cmake --preset default
 cmake --build build
 ----
 
-Check build/base_render/base_render. launch the executable on the parent directory of `shader`.
+Check build/base_render. launch the executable on the parent directory of `shader`.
 
 Can just launch sln when using Visual Studio.
 
