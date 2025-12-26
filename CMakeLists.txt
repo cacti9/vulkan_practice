@@ -12,6 +12,8 @@ if(ENABLE_CPP20_MODULE)
   set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 endif()
 
+add_subdirectory(vma_raii)
+
 find_package (glfw3 REQUIRED)
 find_package (glm REQUIRED)
 find_package (Vulkan REQUIRED) # using 1.4 at the moment
@@ -119,7 +121,7 @@ endfunction()
 
 function (add_chapter CHAPTER_NAME)
   cmake_parse_arguments (CHAPTER "" "SHADER" "LIBS;TEXTURES;MODELS" ${ARGN})
-  add_executable (${CHAPTER_NAME} ${CHAPTER_NAME}.cpp)
+  add_executable (${CHAPTER_NAME} src/${CHAPTER_NAME}.cpp)
   target_compile_definitions(${CHAPTER_NAME} PRIVATE SHADER_DIR="${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/shaders")
   set_target_properties (${CHAPTER_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CHAPTER_NAME})
@@ -160,7 +162,7 @@ function (add_chapter CHAPTER_NAME)
     #add_dependencies (${CHAPTER_NAME} ${CHAPTER_SHADER_TARGET})
 
     set (CHAPTER_SHADER_SLANG_TARGET ${CHAPTER_NAME}_slang_shader)
-    file (GLOB SHADER_SLANG_SOURCES ${CHAPTER_SHADER}.slang)
+    file (GLOB SHADER_SLANG_SOURCES src/${CHAPTER_SHADER}.slang)
     if(SHADER_SLANG_SOURCES)
       add_slang_shader_target( ${CHAPTER_SHADER_SLANG_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SLANG_SOURCES})
       add_dependencies(${CHAPTER_NAME} ${CHAPTER_SHADER_SLANG_TARGET})
@@ -183,4 +185,4 @@ add_chapter (base_render
   SHADER base_shader
   MODELS viking_room.obj
   TEXTURES viking_room.png
-  LIBS glm::glm tinyobjloader::tinyobjloader)
+  LIBS glm::glm tinyobjloader::tinyobjloader vma_raii)

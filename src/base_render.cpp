@@ -34,8 +34,7 @@ import vulkan_hpp;
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
+#include "vma_raii.h"
 
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -118,28 +117,22 @@ private:
     vk::raii::Pipeline graphicsPipeline = nullptr;
 
     vk::Image colorImage;
-    VmaAllocation colorImageAllocation;
     vk::raii::ImageView colorImageView = nullptr;
 
     vk::Image depthImage;
-    VmaAllocation depthImageAllocation;
     vk::raii::ImageView depthImageView = nullptr;
 
     uint32_t mipLevels = 0;
     vk::Image textureImage;
-    VmaAllocation textureImageAllocation;
     vk::raii::ImageView textureImageView = nullptr;
     vk::raii::Sampler textureSampler = nullptr;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     vk::Buffer vertexBuffer;
-    VmaAllocation vertexAllocation;
     vk::Buffer indexBuffer;
-    VmaAllocation indexAllocation;
 
     std::vector<vk::Buffer> uniformBuffers;
-    std::vector<VmaAllocation> uniformBuffersAllocation;
     std::vector<void*> uniformBuffersMapped;
 
     vk::raii::DescriptorPool descriptorPool = nullptr;
@@ -162,34 +155,9 @@ private:
         vk::KHRSynchronization2ExtensionName,
         vk::KHRCreateRenderpass2ExtensionName
     };
-    std::vector<const char*> vmaAskedExtensions = {
-        vk::KHRDedicatedAllocationExtensionName,
-        vk::KHRBindMemory2ExtensionName,
-        vk::KHRMaintenance4ExtensionName,
-        vk::KHRMaintenance5ExtensionName,
-        vk::EXTMemoryBudgetExtensionName,
-        vk::KHRBufferDeviceAddressExtensionName,
-        vk::EXTMemoryPriorityExtensionName,
-        vk::AMDDeviceCoherentMemoryExtensionName,
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-        vk::KHRExternalMemoryWin32ExtensionName,
-#endif
-    };
-    std::unordered_map<const char*, VmaAllocatorCreateFlagBits> vmaFlagFromExtension = {
-      {vk::KHRDedicatedAllocationExtensionName,VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT},
-      {vk::KHRBindMemory2ExtensionName, VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT},
-      {vk::KHRMaintenance4ExtensionName, VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT},
-      {vk::KHRMaintenance5ExtensionName, VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT},
-      {vk::EXTMemoryBudgetExtensionName, VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT},
-      {vk::KHRBufferDeviceAddressExtensionName, VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT},
-      {vk::EXTMemoryPriorityExtensionName, VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT},
-      {vk::AMDDeviceCoherentMemoryExtensionName, VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT},
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-      {vk::KHRExternalMemoryWin32ExtensionName, VMA_ALLOCATOR_CREATE_KHR_EXTERNAL_MEMORY_WIN32_BIT},
-#endif
-    };
+
     VmaAllocatorCreateFlags vmaAvailableFlags = 0;
-    VmaAllocator vmaAllocator;
+    vma_raii::Allocator vmaAllocator;
 
     void initWindow() {
         glfwInit();
@@ -253,18 +221,6 @@ private:
     }
 
     void cleanup() {
-        vmaDestroyImage(vmaAllocator, colorImage, colorImageAllocation);
-        vmaDestroyImage(vmaAllocator, depthImage, depthImageAllocation);
-        vmaDestroyImage(vmaAllocator, textureImage, textureImageAllocation);
-        vmaDestroyBuffer(vmaAllocator, vertexBuffer, vertexAllocation);
-        vmaDestroyBuffer(vmaAllocator, indexBuffer, indexAllocation);
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-          vmaUnmapMemory(vmaAllocator, uniformBuffersAllocation[i]);
-        }
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-          vmaDestroyBuffer(vmaAllocator, uniformBuffers[i], uniformBuffersAllocation[i]);
-        }
-        vmaDestroyAllocator(vmaAllocator);
         glfwDestroyWindow(window);
 
         glfwTerminate();
@@ -388,13 +344,13 @@ private:
         {
             physicalDevice = *devIter;
             auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
-            for (auto vmaAskedExtension : vmaAskedExtensions) {
+            for (auto vmaAskedExtension : vma_raii::vmaAskedExtensions) {
               bool available = std::ranges::any_of(availableDeviceExtensions,
                                              [vmaAskedExtension](auto const & availableDeviceExtension)
                                              { return strcmp(availableDeviceExtension.extensionName, vmaAskedExtension) == 0; });
               if (available) {
                 requiredDeviceExtension.push_back(vmaAskedExtension);
-                vmaAvailableFlags |= vmaFlagFromExtension[vmaAskedExtension];
+                vmaAvailableFlags |= vma_raii::vmaFlagFromExtension[vmaAskedExtension];
               }
             }
         }
@@ -467,15 +423,7 @@ private:
     }
 
     void createVmaAllocator() {
-      VmaAllocatorCreateInfo allocatorCreateInfo = {
-          .flags = vmaAvailableFlags,
-          .physicalDevice = *physicalDevice,
-          .device = *device,
-          .instance = *instance,
-          .vulkanApiVersion = VK_API_VERSION_1_4,
-      };
-
-      vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
+      vmaAllocator.init(vmaAvailableFlags, physicalDevice, device, instance);
     }
 
     void createSwapChain() {
@@ -652,14 +600,14 @@ private:
     void createColorResources() {
       vk::Format colorFormat = swapChainSurfaceFormat.format;
 
-      createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, colorImage, colorImageAllocation);
+      createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, colorImage);
       colorImageView = createImageView(colorImage, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
     }
 
     void createDepthResources() {
       vk::Format depthFormat = findDepthFormat();
 
-      createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, depthImage, depthImageAllocation);
+      createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, depthImage);
       depthImageView = createImageView(depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
     }
     vk::Format findDepthFormat() {
@@ -697,27 +645,14 @@ private:
         throw std::runtime_error("failed to load texture image!");
       }
 
-      VkBuffer stagingBuffer;
-      VmaAllocation stagingAllocation;
-      VkBufferCreateInfo stagingBufferInfo = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = imageSize,
-          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      };
-      VmaAllocationCreateInfo stagingAllocInfo = {
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
-      };
-      vmaCreateBuffer(vmaAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, nullptr);
-      vmaCopyMemoryToAllocation(vmaAllocator, pixels, stagingAllocation, 0, imageSize);
+      auto stagingBuffer = vmaAllocator.createStagingBuffer(imageSize, pixels);
 
       stbi_image_free(pixels);
 
-      createImage(texWidth, texHeight, mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, textureImage, textureImageAllocation);
+      createImage(texWidth, texHeight, mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, textureImage);
 
       transitionImageLayout(textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
-      copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-      vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
+      copyBufferToImage(stagingBuffer.getBuffer(), textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 
       generateMipmaps(textureImage, vk::Format::eR8G8B8A8Srgb, texWidth, texHeight, mipLevels);
     }
@@ -754,7 +689,7 @@ private:
       commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, {}, nullptr, barrier);
       endSingleTimeCommands(commandBuffer);
     }
-    void copyBufferToImage(const vk::Buffer& buffer, vk::Image& image, uint32_t width, uint32_t height) {
+    void copyBufferToImage(const vk::Buffer& buffer, const vk::Image& image, uint32_t width, uint32_t height) {
       auto commandBuffer = beginSingleTimeCommands();
       vk::BufferImageCopy region{
         .bufferOffset = 0,
@@ -767,7 +702,7 @@ private:
       commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, { region });
       endSingleTimeCommands(commandBuffer);
     }
-    void generateMipmaps(vk::Image& image, vk::Format imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
+    void generateMipmaps(const vk::Image& image, vk::Format imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
       // Check if image format supports linear blit-ing
       vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(imageFormat);
 
@@ -857,7 +792,8 @@ private:
       textureSampler = vk::raii::Sampler(device, samplerInfo);
     }
 
-    void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::SampleCountFlagBits numSamples, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::Image& image, VmaAllocation& imageAllocation) {
+    void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::SampleCountFlagBits numSamples, 
+                     vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::Image& image) {
       vk::ImageCreateInfo imageInfo{
         .imageType = vk::ImageType::e2D,
         .format = format,
@@ -869,11 +805,7 @@ private:
         .usage = usage,
         .sharingMode = vk::SharingMode::eExclusive
       };
-      VmaAllocationCreateInfo allocInfo = {
-        .usage=VMA_MEMORY_USAGE_AUTO
-      };
-
-      VkImage temp; vmaCreateImage(vmaAllocator, imageInfo, &allocInfo, &temp, &imageAllocation, nullptr); image = temp;
+      vmaAllocator.createImage(imageInfo, image);
     }
 
     [[nodiscard]] vk::raii::ImageView createImageView(vk::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels) {
@@ -928,71 +860,28 @@ private:
 
     void createVertexBuffer() {
         VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-        createDeviceLocalBuffer(vertexBuffer, vertexAllocation, bufferSize, vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        createDeviceLocalBuffer(vertexBuffer, bufferSize, vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     }
     void createIndexBuffer() {
         VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-        createDeviceLocalBuffer(indexBuffer, indexAllocation, bufferSize, indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        createDeviceLocalBuffer(indexBuffer, bufferSize, indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
    }
-    void createDeviceLocalBuffer(vk::Buffer& buffer, VmaAllocation& allocation, VkDeviceSize size, const void* data, VkBufferUsageFlags usage) {
-        vk::Buffer stagingBuffer;
-        VmaAllocation stagingAllocation;
-        VkBufferCreateInfo stagingBufferInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        };
-        VmaAllocationCreateInfo stagingAllocInfo = {
-          .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-          .usage = VMA_MEMORY_USAGE_AUTO
-        };
-        VkBuffer temp;  vmaCreateBuffer(vmaAllocator, &stagingBufferInfo, &stagingAllocInfo, &temp, &stagingAllocation, nullptr); stagingBuffer = temp;
-
-        vmaCopyMemoryToAllocation(vmaAllocator, data, stagingAllocation, 0, size);
-
-        VkBufferCreateInfo bufferInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = usage,
-        };
-        VmaAllocationCreateInfo allocInfo = {
-          .usage = VMA_MEMORY_USAGE_AUTO
-        };
-        vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &temp, &allocation, nullptr); buffer = temp;
-
-        copyBuffer(stagingBuffer, buffer, size);
-        vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
+    void createDeviceLocalBuffer(vk::Buffer& buffer, VkDeviceSize size, const void* data, VkBufferUsageFlags usage) {
+        auto stagingBuffer = vmaAllocator.createStagingBuffer(size, data);
+        buffer = vmaAllocator.createDeviceLocalBuffer(size, usage);
+        copyBuffer(stagingBuffer.getBuffer(), buffer, size);
     }
-    void copyBuffer(vk::Buffer& srcBuffer, vk::Buffer& dstBuffer, VkDeviceSize size) {
+    void copyBuffer(const vk::Buffer& srcBuffer, const vk::Buffer& dstBuffer, VkDeviceSize size) {
       auto commandCopyBuffer = beginSingleTimeCommands();
       commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy(0, 0, size));
       endSingleTimeCommands(commandCopyBuffer);
     }
 
     void createUniformBuffers() {
-      uniformBuffers.clear();
-      uniformBuffersAllocation.clear();
-
       for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkBufferCreateInfo bufferInfo = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = sizeof(UniformBufferObject),
-          .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        };
-        VmaAllocationCreateInfo allocInfo = {
-          .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-          .usage = VMA_MEMORY_USAGE_AUTO
-        };
-
-        VkBuffer buffer;
-        VmaAllocation allocation;
-        vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &buffer, &allocation, nullptr);
-
-        void* mapped;
-        vmaMapMemory(vmaAllocator, allocation, &mapped);
-        uniformBuffersMapped.push_back(mapped);
-        uniformBuffers.push_back(buffer);
-        uniformBuffersAllocation.push_back(allocation);
+        auto [buf, map] = vmaAllocator.createMappedBuffer(sizeof(UniformBufferObject));
+        uniformBuffersMapped.push_back(map);
+        uniformBuffers.push_back(buf);
       }
     }
 
@@ -1145,9 +1034,7 @@ private:
         cleanupSwapChain();
         createSwapChain();
         createSwapChainImageViews();
-        vmaDestroyImage(vmaAllocator, depthImage, depthImageAllocation);
         createDepthResources();
-        vmaDestroyImage(vmaAllocator, colorImage, colorImageAllocation);
         createColorResources();
     }
     void cleanupSwapChain() {
