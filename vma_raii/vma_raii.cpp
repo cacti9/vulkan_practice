@@ -1,6 +1,8 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <iostream>
+#include <stdexcept>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
@@ -11,7 +13,7 @@ import vulkan_hpp;
 #define VMA_IMPLEMENTATION
 #include "vma_raii.h"
 
-namespace vma_raii { // Start of namespace
+namespace vma_raii { 
   std::vector<const char*> vmaAskedExtensions = {
       vk::KHRDedicatedAllocationExtensionName,
       vk::KHRBindMemory2ExtensionName,
@@ -40,6 +42,10 @@ namespace vma_raii { // Start of namespace
   };
 
   void Allocator::init(VmaAllocatorCreateFlags vmaAvailableFlags, vk::PhysicalDevice physicalDevice, vk::Device device, vk::Instance instance) {
+    if (vmaAllocator) {
+      std::cerr << "You must not run init() more than once.\n";
+      return;
+    }
     VmaAllocatorCreateInfo allocatorCreateInfo = {
     .flags = vmaAvailableFlags,
     .physicalDevice = physicalDevice,
@@ -48,7 +54,9 @@ namespace vma_raii { // Start of namespace
     .vulkanApiVersion = VK_API_VERSION_1_4,
     };
 
-    vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
+    if (vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create vma allocator");
+    }
   }
 
   Allocator::Image::Image(vk::ImageCreateInfo imageInfo)
@@ -57,7 +65,10 @@ namespace vma_raii { // Start of namespace
       .usage = VMA_MEMORY_USAGE_AUTO
     };
     VkImage temp;
-    vmaCreateImage(vmaAllocator, imageInfo, &allocInfo, &temp, &allocation, nullptr);
+
+    if (vmaCreateImage(vmaAllocator, imageInfo, &allocInfo, &temp, &allocation, nullptr) != VK_SUCCESS) {
+      throw std::runtime_error("vma failed to allocate image");
+    }
     image = temp;
   }
 
@@ -72,7 +83,9 @@ namespace vma_raii { // Start of namespace
       .usage = VMA_MEMORY_USAGE_AUTO
     };
     VkBuffer temp;
-    vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &temp, &allocation, nullptr);
+    if (vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocInfo, &temp, &allocation, nullptr) != VK_SUCCESS) {
+      throw std::runtime_error("vma failed to allocate buffer");
+    }
     buffer = temp;
   }
 
@@ -83,9 +96,11 @@ namespace vma_raii { // Start of namespace
     image = raiiImg.image;
     imagesMap.emplace(image, std::move(raiiImg));
   }
-  Allocator::StagingBuffer Allocator::createStagingBuffer(VkDeviceSize size, const void* pSrcHostPointer) {
+  Allocator::StagingBuffer Allocator::createStagingBuffer(VkDeviceSize size, const void* data) {
     StagingBuffer ret(size);
-    vmaCopyMemoryToAllocation(vmaAllocator, pSrcHostPointer, ret.allocation, 0, size);
+    if (vmaCopyMemoryToAllocation(vmaAllocator, data, ret.allocation, 0, size) != VK_SUCCESS) {
+      throw std::runtime_error("vma failed to copy data to staging buffer");
+    }
     return ret;
   }
   vk::Buffer Allocator::createDeviceLocalBuffer(VkDeviceSize size, VkBufferUsageFlags usage) {
@@ -96,7 +111,9 @@ namespace vma_raii { // Start of namespace
     buffers.push_back(std::make_unique<MappedBuffer>(size));
     auto& back = buffers.back();
     void* mapped;
-    vmaMapMemory(vmaAllocator, back->allocation, &mapped);
+    if (vmaMapMemory(vmaAllocator, back->allocation, &mapped) != VK_SUCCESS) {
+      throw std::runtime_error("vma failed to map memory");
+    }
     return { back->buffer, mapped };
   }
 }
