@@ -102,16 +102,18 @@ private:
     vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
     vk::raii::SurfaceKHR             surface        = nullptr;
     vk::raii::PhysicalDevice         physicalDevice = nullptr;
-    vk::SampleCountFlagBits          msaaSamples    = vk::SampleCountFlagBits::e1;
+
     vk::raii::Device                 device         = nullptr;
     uint32_t                         queueIndex     = ~0;
     vk::raii::Queue                  queue          = nullptr;
+
     vk::raii::SwapchainKHR           swapChain      = nullptr;
     std::vector<vk::Image>           swapChainImages;
     vk::SurfaceFormatKHR             swapChainSurfaceFormat;
     vk::Extent2D                     swapChainExtent;
     std::vector<vk::raii::ImageView> swapChainImageViews;
 
+    vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
     vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
@@ -180,19 +182,21 @@ private:
         setupDebugMessenger();
         createSurface();
         pickPhysicalDevice();
-        msaaSamples = getMaxUsableSampleCount();
+
         createLogicalDevice();
-        createVmaAllocator();
 
         createSwapChain();
-        createSwapChainImageViews(); // image view
+        createSwapChainImageViews(); 
 
+        msaaSamples = getMaxUsableSampleCount();
         createDescriptorSetLayout();
         createGraphicsPipeline();
 
-        createCommandPool();
+        // texture mipmap blit requires command buffer
+        createCommandPool(); 
 
-        // image & image view
+        // Resources
+        vmaAllocator.init(vmaAvailableFlags, physicalDevice, device, instance);
         createColorResources();
         createDepthResources();
         createTextureImage();
@@ -200,12 +204,12 @@ private:
         createTextureSampler();
 
         loadModel();
-        createVertexBuffer();
+        createVertexBuffer(); // copying from staging requires command buffer
         createIndexBuffer();
 
         createUniformBuffers();
         createDescriptorPool();
-        createDescriptorSets();
+        createDescriptorSets(); // needs sampler & uniform buffer
 
         createCommandBuffers();
         createSyncObjects();
@@ -360,20 +364,6 @@ private:
         }
     }
 
-    vk::SampleCountFlagBits getMaxUsableSampleCount() {
-      vk::PhysicalDeviceProperties physicalDeviceProperties = physicalDevice.getProperties();
-
-      vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-      if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
-      if (counts & vk::SampleCountFlagBits::e32) { return vk::SampleCountFlagBits::e32; }
-      if (counts & vk::SampleCountFlagBits::e16) { return vk::SampleCountFlagBits::e16; }
-      if (counts & vk::SampleCountFlagBits::e8) { return vk::SampleCountFlagBits::e8; }
-      if (counts & vk::SampleCountFlagBits::e4) { return vk::SampleCountFlagBits::e4; }
-      if (counts & vk::SampleCountFlagBits::e2) { return vk::SampleCountFlagBits::e2; }
-
-      return vk::SampleCountFlagBits::e1;
-    }
-
     void createLogicalDevice() {
         std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
@@ -420,10 +410,6 @@ private:
 
         device = vk::raii::Device( physicalDevice, deviceCreateInfo );
         queue = vk::raii::Queue( device, queueIndex, 0 );
-    }
-
-    void createVmaAllocator() {
-      vmaAllocator.init(vmaAvailableFlags, physicalDevice, device, instance);
     }
 
     void createSwapChain() {
@@ -484,6 +470,20 @@ private:
         for (uint32_t i = 0; i < swapChainImages.size(); i++) {
           swapChainImageViews.push_back(createImageView(swapChainImages[i], swapChainSurfaceFormat.format, vk::ImageAspectFlagBits::eColor, 1));
         }
+    }
+
+    vk::SampleCountFlagBits getMaxUsableSampleCount() {
+      vk::PhysicalDeviceProperties physicalDeviceProperties = physicalDevice.getProperties();
+
+      vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+      if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
+      if (counts & vk::SampleCountFlagBits::e32) { return vk::SampleCountFlagBits::e32; }
+      if (counts & vk::SampleCountFlagBits::e16) { return vk::SampleCountFlagBits::e16; }
+      if (counts & vk::SampleCountFlagBits::e8) { return vk::SampleCountFlagBits::e8; }
+      if (counts & vk::SampleCountFlagBits::e4) { return vk::SampleCountFlagBits::e4; }
+      if (counts & vk::SampleCountFlagBits::e2) { return vk::SampleCountFlagBits::e2; }
+
+      return vk::SampleCountFlagBits::e1;
     }
 
     void createDescriptorSetLayout() {
