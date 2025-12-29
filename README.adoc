@@ -22,11 +22,15 @@ Progress:
 
 == Project Structure
 
-- src(main target) : from Vulkan Tutorial, main function. shader.
-- vma_raii(vma c++ wrapper): simple raii wrapper for vma.
-- assets
+[source]
+----
+.
+├── src/ - Source code and shaders.
+├── vma_raii/ - A C++ RAII wrapper library for VMA.
+├── assets/ - 3D models and textures.
+----
 
-assets and compiled shader are copied to build.
+Assets and compiled shaders are copied to the build.
 
 == Installation Dependencies
 

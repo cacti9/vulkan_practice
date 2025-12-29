@@ -77,28 +77,9 @@ find_program (GLSLANG_VALIDATOR "glslangValidator" HINTS $ENV{VULKAN_SDK}/bin RE
 set_property (TARGET glslang::validator PROPERTY IMPORTED_LOCATION "${GLSLANG_VALIDATOR}")
 find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 
-#function (add_shaders_target TARGET)
-#  cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
-#  set (SHADERS_DIR ${SHADER_CHAPTER_NAME}/shaders)
-#  add_custom_command (
-#    OUTPUT ${SHADERS_DIR}
-#    COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-#    )
-#  add_custom_command (
-#    OUTPUT ${SHADERS_DIR}/frag.spv ${SHADERS_DIR}/vert.spv
-#    COMMAND glslang::validator
-#    ARGS --target-env vulkan1.0 ${SHADER_SOURCES} --quiet
-#    WORKING_DIRECTORY ${SHADERS_DIR}
-#    DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
-#    COMMENT "Compiling Shaders"
-#    VERBATIM
-#    )
-#  add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/frag.spv ${SHADERS_DIR}/vert.spv)
-#endfunction ()
-
 function (add_slang_shader_target TARGET)
-  cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
-  set (SHADERS_DIR "${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/shaders")
+  cmake_parse_arguments ("SHADER" "" "APP_NAME" "SOURCES" ${ARGN})
+  set (SHADERS_DIR "${CMAKE_BINARY_DIR}/${SHADER_APP_NAME}/shaders")
 
   add_custom_command (
           OUTPUT ${SHADERS_DIR}
@@ -131,29 +112,33 @@ function (add_slang_shader_target TARGET)
   add_custom_target (${TARGET} DEPENDS ${SPV_OUTPUTS})
 endfunction()
 
-function (add_chapter CHAPTER_NAME)
-  cmake_parse_arguments (CHAPTER "" "SHADER" "LIBS;TEXTURES;MODELS" ${ARGN})
-  add_executable (${CHAPTER_NAME} 
-  src/${CHAPTER_NAME}.cpp
+function (add_app APP_NAME)
+  cmake_parse_arguments (APP "" "" "SHADERS;LIBS;TEXTURES;MODELS" ${ARGN})
+  file(GLOB ALL_SOURCES "src/*.cpp" "src/*.h" "src/*.hpp")
+  add_executable (${APP_NAME} ${ALL_SOURCES})
+  target_compile_definitions(${APP_NAME}
+  PRIVATE
+    SHADER_DIR="${CMAKE_BINARY_DIR}/${APP_NAME}/shaders"
+    APP_NAME="${APP_NAME}"
   )
-  target_compile_definitions(${CHAPTER_NAME} PRIVATE SHADER_DIR="${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/shaders")
-  set_target_properties (${CHAPTER_NAME} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CHAPTER_NAME})
-  set_target_properties (${CHAPTER_NAME} PROPERTIES CXX_STANDARD 20)
-  target_link_libraries (${CHAPTER_NAME} Vulkan::cppm glfw GPUOpen::VulkanMemoryAllocator)
-  target_include_directories (${CHAPTER_NAME} 
+  set_target_properties (${APP_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${APP_NAME})
+  set_target_properties (${APP_NAME} PROPERTIES CXX_STANDARD 20)
+  target_link_libraries (${APP_NAME} Vulkan::cppm glfw GPUOpen::VulkanMemoryAllocator)
+  target_include_directories (${APP_NAME} 
   PRIVATE
     ${STB_INCLUDEDIR}
+    src/
   )
 
   # Add compile definition if C++ 20 module is enabled
   if(ENABLE_CPP20_MODULE)
-    target_compile_definitions(${CHAPTER_NAME} PRIVATE USE_CPP20_MODULES=1)
+    target_compile_definitions(${APP_NAME} PRIVATE USE_CPP20_MODULES=1)
 
     # Add MSVC-specific compiler options for proper C++ module support
     # These flags need to be consistent between the module and its consumers.
     if(MSVC)
-      target_compile_options(${CHAPTER_NAME} PRIVATE
+      target_compile_options(${APP_NAME} PRIVATE
         /std:c++latest      # Use latest C++ standard for better module support
         /permissive-        # Standards conformance mode
         /Zc:__cplusplus     # Enable correct __cplusplus macro
@@ -165,41 +150,39 @@ function (add_chapter CHAPTER_NAME)
   endif()
 
   if(WIN32)
-    target_compile_definitions(${CHAPTER_NAME} PRIVATE
+    target_compile_definitions(${APP_NAME} PRIVATE
       VK_USE_PLATFORM_WIN32_KHR)
     if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*")
-      set_target_properties(${CHAPTER_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}")
+      set_target_properties(${APP_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${APP_NAME}")
     endif()
   endif()
 
-  if (DEFINED CHAPTER_SHADER)
-    #set (CHAPTER_SHADER_TARGET ${CHAPTER_NAME}_shader)
-    #file (GLOB SHADER_SOURCES ${CHAPTER_SHADER}.frag ${CHAPTER_SHADER}.vert ${CHAPTER_SHADER}.comp)
-    #add_shaders_target (${CHAPTER_SHADER_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SOURCES})
-    #add_dependencies (${CHAPTER_NAME} ${CHAPTER_SHADER_TARGET})
-
-    set (CHAPTER_SHADER_SLANG_TARGET ${CHAPTER_NAME}_slang_shader)
-    file (GLOB SHADER_SLANG_SOURCES src/${CHAPTER_SHADER}.slang src/original.slang)
+  if (DEFINED APP_SHADERS)
+    set (APP_SHADER_SLANG_TARGET ${APP_NAME}_slang_shader)
+    set(SHADER_SLANG_SOURCES "")
+    foreach(SHADER_NAME IN LISTS APP_SHADERS)
+      list(APPEND SHADER_SLANG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/${SHADER_NAME}.slang")
+    endforeach()
     if(SHADER_SLANG_SOURCES)
-      add_slang_shader_target( ${CHAPTER_SHADER_SLANG_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SLANG_SOURCES})
-      add_dependencies(${CHAPTER_NAME} ${CHAPTER_SHADER_SLANG_TARGET})
+      add_slang_shader_target( ${APP_SHADER_SLANG_TARGET} APP_NAME ${APP_NAME} SOURCES ${SHADER_SLANG_SOURCES})
+      add_dependencies(${APP_NAME} ${APP_SHADER_SLANG_TARGET})
     endif()
   endif ()
-  if (DEFINED CHAPTER_LIBS)
-    target_link_libraries (${CHAPTER_NAME} ${CHAPTER_LIBS})
+  if (DEFINED APP_LIBS)
+    target_link_libraries (${APP_NAME} ${APP_LIBS})
   endif ()
-  if (DEFINED CHAPTER_MODELS)
-    list(TRANSFORM CHAPTER_MODELS PREPEND "${CMAKE_SOURCE_DIR}/assets/")
-    file (COPY ${CHAPTER_MODELS} DESTINATION ${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/models)
+  if (DEFINED APP_MODELS)
+    list(TRANSFORM APP_MODELS PREPEND "${CMAKE_SOURCE_DIR}/assets/")
+    file (COPY ${APP_MODELS} DESTINATION ${CMAKE_BINARY_DIR}/${APP_NAME}/models)
   endif ()
-  if (DEFINED CHAPTER_TEXTURES)
-    list(TRANSFORM CHAPTER_TEXTURES PREPEND "${CMAKE_SOURCE_DIR}/assets/")
-    file (COPY ${CHAPTER_TEXTURES} DESTINATION ${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/textures)
+  if (DEFINED APP_TEXTURES)
+    list(TRANSFORM APP_TEXTURES PREPEND "${CMAKE_SOURCE_DIR}/assets/")
+    file (COPY ${APP_TEXTURES} DESTINATION ${CMAKE_BINARY_DIR}/${APP_NAME}/textures)
   endif ()
 endfunction ()
 
-add_chapter (base_render
-  SHADER base_shader
+add_app (app1
+  SHADERS base_shader original
   MODELS viking_room.obj
   TEXTURES viking_room.png
   LIBS glm::glm tinyobjloader::tinyobjloader vma_raii)
