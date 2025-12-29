@@ -98,36 +98,53 @@ find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 
 function (add_slang_shader_target TARGET)
   cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
-  set (SHADERS_DIR ${SHADER_CHAPTER_NAME}/shaders)
-  file(GLOB HAS_COMPUTE ${CHAPTER_SHADER}.comp)
-  set (ENTRY_POINTS -entry vertMain -entry fragMain)
-  if(HAS_COMPUTE)
-    list(APPEND ENTRY_POINTS -entry compMain)
-  endif()
+  set (SHADERS_DIR "${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/shaders")
+
   add_custom_command (
           OUTPUT ${SHADERS_DIR}
           COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
   )
-  add_custom_command (
-          OUTPUT  ${SHADERS_DIR}/slang.spv
-          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
-          WORKING_DIRECTORY ${SHADERS_DIR}
-          DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
-          COMMENT "Compiling Slang Shaders"
-          VERBATIM
-  )
-  add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+
+  set(SPV_OUTPUTS "")
+  foreach(SHADER_SOURCE IN LISTS SHADER_SOURCES)
+    get_filename_component(SHADER_NAME_WE ${SHADER_SOURCE} NAME_WE)
+    set(SPV_OUTPUT_FILENAME ${SHADER_NAME_WE}.spv)
+    set(SPV_OUTPUT_FULLPATH "${SHADERS_DIR}/${SPV_OUTPUT_FILENAME}")
+    list(APPEND SPV_OUTPUTS ${SPV_OUTPUT_FULLPATH})
+
+    set (ENTRY_POINTS -entry vertMain -entry fragMain)
+    file(STRINGS "${SHADER_SOURCE}" COMPUTE_PRESENT REGEX "compMain")
+    if(COMPUTE_PRESENT)
+      list(APPEND ENTRY_POINTS -entry compMain)
+    endif()
+
+    add_custom_command (
+            OUTPUT  ${SPV_OUTPUT_FULLPATH}
+            COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o ${SPV_OUTPUT_FILENAME}
+            WORKING_DIRECTORY ${SHADERS_DIR}
+            DEPENDS ${SHADER_SOURCE} ${SHADERS_DIR}
+            COMMENT "Compiling Slang Shader: ${SHADER_SOURCE}"
+            VERBATIM
+    )
+  endforeach()
+
+  add_custom_target (${TARGET} DEPENDS ${SPV_OUTPUTS})
 endfunction()
 
 function (add_chapter CHAPTER_NAME)
   cmake_parse_arguments (CHAPTER "" "SHADER" "LIBS;TEXTURES;MODELS" ${ARGN})
-  add_executable (${CHAPTER_NAME} src/${CHAPTER_NAME}.cpp)
+  add_executable (${CHAPTER_NAME} 
+  src/${CHAPTER_NAME}.cpp
+  )
   target_compile_definitions(${CHAPTER_NAME} PRIVATE SHADER_DIR="${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/shaders")
   set_target_properties (${CHAPTER_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CHAPTER_NAME})
   set_target_properties (${CHAPTER_NAME} PROPERTIES CXX_STANDARD 20)
   target_link_libraries (${CHAPTER_NAME} Vulkan::cppm glfw GPUOpen::VulkanMemoryAllocator)
-  target_include_directories (${CHAPTER_NAME} PRIVATE ${STB_INCLUDEDIR})
+  target_include_directories (${CHAPTER_NAME} 
+  PRIVATE
+    ${STB_INCLUDEDIR}
+  )
 
   # Add compile definition if C++ 20 module is enabled
   if(ENABLE_CPP20_MODULE)
@@ -162,7 +179,7 @@ function (add_chapter CHAPTER_NAME)
     #add_dependencies (${CHAPTER_NAME} ${CHAPTER_SHADER_TARGET})
 
     set (CHAPTER_SHADER_SLANG_TARGET ${CHAPTER_NAME}_slang_shader)
-    file (GLOB SHADER_SLANG_SOURCES src/${CHAPTER_SHADER}.slang)
+    file (GLOB SHADER_SLANG_SOURCES src/${CHAPTER_SHADER}.slang src/original.slang)
     if(SHADER_SLANG_SOURCES)
       add_slang_shader_target( ${CHAPTER_SHADER_SLANG_TARGET} CHAPTER_NAME ${CHAPTER_NAME} SOURCES ${SHADER_SLANG_SOURCES})
       add_dependencies(${CHAPTER_NAME} ${CHAPTER_SHADER_SLANG_TARGET})

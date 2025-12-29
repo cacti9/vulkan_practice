@@ -18,6 +18,7 @@ Progress:
 - Added mipmap.
 - Added MSAA.
 - separated vma stuffs into library.
+- Added compute shader on top.
 
 == Project Structure
 
