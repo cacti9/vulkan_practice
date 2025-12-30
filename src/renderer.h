@@ -18,9 +18,12 @@ import vulkan_hpp;
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
 #include "vma_raii.h"
+
+constexpr uint32_t WIDTH = 800;
+constexpr uint32_t HEIGHT = 600;
+constexpr uint32_t PARTICLE_COUNT = 256;
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 struct Particle {
   glm::vec2 position;
@@ -57,12 +60,6 @@ struct Vertex {
 
   bool operator==(const Vertex& other) const {
     return pos == other.pos && color == other.color && texCoord == other.texCoord;
-  }
-};
-
-template<> struct std::hash<Vertex> {
-  size_t operator()(Vertex const& vertex) const noexcept {
-    return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
   }
 };
 
@@ -169,7 +166,6 @@ private:
     createSwapChain();
     createSwapChainImageViews(); 
 
-    msaaSamples = getMaxUsableSampleCount();
     createOriginalDescriptorSetLayout();
     createOriginalGraphicsPipeline();
     createComputeDescriptorSetLayout();
@@ -187,7 +183,6 @@ private:
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
-
     loadModel();
     createVertexBuffer(); // copying from staging requires command buffer
     createIndexBuffer();
@@ -203,18 +198,14 @@ private:
   }
 
   void mainLoop();
-
   void cleanup();
-
   void createInstance();
   [[nodiscard]] std::vector<const char*> getRequiredExtensions() const;
-
   void setupDebugMessenger();
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
-
   void createSurface();
-
   void pickPhysicalDevice();
+  vk::SampleCountFlagBits getMaxUsableSampleCount();
 
   void createLogicalDevice();
 
@@ -223,63 +214,48 @@ private:
   static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
   static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
   vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
-
   void createSwapChainImageViews();
-
-  vk::SampleCountFlagBits getMaxUsableSampleCount();
 
   void createOriginalDescriptorSetLayout();
   void createOriginalGraphicsPipeline();
-
   void createComputeDescriptorSetLayout();
   void createGraphicsPipeline();
   void createComputePipeline();
   [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
+  static std::vector<char> readFile(const std::string& filename);
 
   void createCommandPool();
 
-  // <Resources>-----------------------------------------
   void createShaderStorageBuffers();
-
   void createColorResources();
-
   void createDepthResources();
   vk::Format findDepthFormat();
   vk::Format findSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const;
   bool hasStencilComponent(vk::Format format);
-
   void createTextureImage();
   void transitionImageLayout(const vk::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels);
   void copyBufferToImage(const vk::Buffer& buffer, const vk::Image& image, uint32_t width, uint32_t height);
   void generateMipmaps(const vk::Image& image, vk::Format imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
-
   void createTextureImageView();
-
   void createTextureSampler();
-
   void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::SampleCountFlagBits numSamples,
                     vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::Image& image);
-
   [[nodiscard]] vk::raii::ImageView createImageView(vk::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels);
-  // </Resources>----------------------------------------
-
   void loadModel();
-
   void createVertexBuffer();
   void createIndexBuffer();
   void createDeviceLocalBuffer(vk::Buffer& buffer, VkDeviceSize size, const void* data, VkBufferUsageFlags usage);
   void copyBuffer(const vk::Buffer& srcBuffer, const vk::Buffer& dstBuffer, VkDeviceSize size);
+  vk::raii::CommandBuffer beginSingleTimeCommands();
+  void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer);
 
   void createUniformBuffers();
-
   void createDescriptorPool();
-
   void createDescriptorSets();
   void createComputeDescriptorSets();
 
   void createCommandBuffers();
   void createComputeCommandBuffers();
-
   void createSyncObjects();
 
   void drawFrame();
@@ -298,10 +274,4 @@ private:
     vk::ImageAspectFlags image_aspect_flags
   );
   void recordComputeCommandBuffer();
-
-  // used across many functions
-  vk::raii::CommandBuffer beginSingleTimeCommands();
-  void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer);
-
-  static std::vector<char> readFile(const std::string& filename);
 };
