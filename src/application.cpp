@@ -19,15 +19,6 @@ const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 constexpr uint32_t PARTICLE_COUNT = 256;
 
-#ifdef NDEBUG
-constexpr bool enableValidationLayers = false;
-#else
-constexpr bool enableValidationLayers = true;
-#endif
-const std::vector<char const*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"
-};
-
 void VulkanRenderer::initWindow() {
   glfwInit();
 
@@ -62,6 +53,7 @@ void VulkanRenderer::cleanup() {
 }
 
 void VulkanRenderer::createInstance() {
+  // Validation layers are now managed by vulkanconfig instead of being hard-coded
   constexpr vk::ApplicationInfo appInfo{ 
     .pApplicationName = APP_NAME,
     .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
@@ -70,72 +62,78 @@ void VulkanRenderer::createInstance() {
     .apiVersion = vk::ApiVersion14
   };
 
-  // Get the required layers
-  std::vector<char const*> requiredLayers;
-  if (enableValidationLayers) {
-    requiredLayers.assign(validationLayers.begin(), validationLayers.end());
-  }
-
-  // Check if the required layers are supported by the Vulkan implementation.
-  auto layerProperties = context.enumerateInstanceLayerProperties();
-  for (auto const& requiredLayer : requiredLayers)
-  {
-    if (std::ranges::none_of(layerProperties,
-      [requiredLayer](auto const& layerProperty)
-      { return strcmp(layerProperty.layerName, requiredLayer) == 0; }))
-    {
-      throw std::runtime_error("Required layer not supported: " + std::string(requiredLayer));
-    }
-  }
-
-  // Get the required extensions.
   auto requiredExtensions = getRequiredExtensions();
-
-  // Check if the required extensions are supported by the Vulkan implementation.
-  auto extensionProperties = context.enumerateInstanceExtensionProperties();
-  for (auto const& requiredExtension : requiredExtensions)
-  {
-    if (std::ranges::none_of(extensionProperties,
-      [requiredExtension](auto const& extensionProperty)
-      { return strcmp(extensionProperty.extensionName, requiredExtension) == 0; }))
-    {
-      throw std::runtime_error("Required extension not supported: " + std::string(requiredExtension));
-    }
-  }
 
   vk::InstanceCreateInfo createInfo{
     .pApplicationInfo = &appInfo,
-    .enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
-    .ppEnabledLayerNames = requiredLayers.data(),
     .enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
     .ppEnabledExtensionNames = requiredExtensions.data() 
   };
   instance = vk::raii::Instance(context, createInfo);
 }
 
-std::vector<const char*> VulkanRenderer::getRequiredExtensions() {
+[[nodiscard]] std::vector<const char*> VulkanRenderer::getRequiredExtensions() const {
+  // Get the required extensions from GLFW
   uint32_t glfwExtensionCount = 0;
   auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
   std::vector extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-  if (enableValidationLayers) {
+
+  // Check if the debug utils extension is available
+  std::vector<vk::ExtensionProperties> props = context.enumerateInstanceExtensionProperties();
+  bool debugUtilsAvailable = std::ranges::any_of(props,
+    [](vk::ExtensionProperties const & ep) {
+      return strcmp(ep.extensionName, vk::EXTDebugUtilsExtensionName) == 0;
+    });
+
+  // Always include the debug utils extension if available
+  // This allows validation layers to be enabled via vulkanconfig
+  if (debugUtilsAvailable) {
     extensions.push_back(vk::EXTDebugUtilsExtensionName);
+  }
+  else {
+    std::cout << "VK_EXT_debug_utils extension not available. Validation layers may not work." << std::endl;
   }
 
   return extensions;
 }
 
 void VulkanRenderer::setupDebugMessenger() {
-  if (!enableValidationLayers) return;
+  // Always set up the debug messenger
+  // It will only be used if validation layers are enabled via vulkanconfig
 
-  vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-  vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+  vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(
+    vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+    vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+    vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+  );
+
+  vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(
+    vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+    vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+    vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
+  );
+
   vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{
     .messageSeverity = severityFlags,
     .messageType = messageTypeFlags,
     .pfnUserCallback = &debugCallback
   };
-  debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+
+  try {
+    debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+  }
+  catch (vk::SystemError& err) {
+    // If the debug utils extension is not available, this will fail
+    // That's okay; it just means validation layers aren't enabled
+    std::cout << "Debug messenger not available. Validation layers may not be enabled." << std::endl;
+  }
+}
+VKAPI_ATTR vk::Bool32 VKAPI_CALL VulkanRenderer::debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
+  if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
+    std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
+  }
+
+  return vk::False;
 }
 
 void VulkanRenderer::createSurface() {
@@ -1281,14 +1279,6 @@ void VulkanRenderer::endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffe
   };
   allInOneQueue.submit(submitInfo, nullptr);
   allInOneQueue.waitIdle();
-}
-
-VKAPI_ATTR vk::Bool32 VKAPI_CALL VulkanRenderer::debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
-  if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
-    std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
-  }
-
-  return vk::False;
 }
 
 std::vector<char> VulkanRenderer::readFile(const std::string& filename) {

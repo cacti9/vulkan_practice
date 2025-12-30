@@ -207,9 +207,10 @@ private:
   void cleanup();
 
   void createInstance();
-  std::vector<const char*> getRequiredExtensions();
+  [[nodiscard]] std::vector<const char*> getRequiredExtensions() const;
 
   void setupDebugMessenger();
+  static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
 
   void createSurface();
 
@@ -301,8 +302,6 @@ private:
   // used across many functions
   vk::raii::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer);
-
-  static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
 
   static std::vector<char> readFile(const std::string& filename);
 };
